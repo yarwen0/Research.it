@@ -1,0 +1,102 @@
+[
+  {
+    "paper_id": "pose_001",
+    "problem": "3d_pose_estimation",
+    "methods": [
+      ["stacked_hourglass_network", "Stacked hourglass backbone"],
+      ["pose_refinement_mlp", "Pose refinement MLP"]
+    ],
+    "datasets": [
+      ["human36m", "Human3.6M"],
+      ["mpii_human_pose", "MPII Human Pose"]
+    ],
+    "limitations_implied": [
+      ["reliance_on_2d_pose", "Requires accurate 2D pose heatmaps"],
+      ["occlusion_sensitivity", "Performance drops on heavily occluded joints"]
+    ],
+    "limitations_explicit": [
+      ["high_gpu_requirements", "High GPU memory footprint"]
+    ],
+    "future_work": [
+      ["add_temporal_modeling", "Incorporate temporal context"],
+      ["extend_to_multi_person", "Extend to multi-person scenes"]
+    ]
+  },
+  {
+    "paper_id": "pose_002",
+    "problem": "3d_pose_estimation",
+    "methods": [
+      ["temporal_transformer_pose_estimation", "Temporal transformer"],
+      ["pose_refinement_mlp", "Residual pose refinement"]
+    ],
+    "datasets": [
+      ["human36m", "Human3.6M"]
+    ],
+    "limitations_implied": [
+      ["reliance_on_2d_pose", "Still depends on 2D detections"]
+    ],
+    "limitations_explicit": [
+      ["performance_drops", "Drop in accuracy on motion blur"]
+    ],
+    "future_work": [
+      ["evaluate_on_more_datasets", "Test on additional benchmarks"],
+      ["extend_to_multi_person", "Add multi-person reasoning"]
+    ]
+  },
+  {
+    "paper_id": "pose_003",
+    "problem": "3d_pose_estimation",
+    "methods": [
+      ["diffusion_based_pose_estimation", "Diffusion pose model"]
+    ],
+    "datasets": [
+      ["mpii_human_pose", "MPII Human Pose"]
+    ],
+    "limitations_implied": [
+      ["reliance_on_2d_pose", "Uses off-the-shelf 2D keypoints"],
+      ["occlusion_sensitivity", "Fails with severe occlusion"]
+    ],
+    "limitations_explicit": [],
+    "future_work": [
+      ["evaluate_on_more_datasets", "Evaluate on more mocap datasets"]
+    ]
+  },
+  {
+    "paper_id": "pose_004",
+    "problem": "3d_pose_estimation",
+    "methods": [
+      ["transformer_pose_forecasting", "Transformer pose forecasting"]
+    ],
+    "datasets": [
+      ["amass", "AMASS"]
+    ],
+    "limitations_implied": [
+      ["reliance_on_2d_pose", "Pipeline still relies on 2D joints"],
+      ["occlusion_sensitivity", "Sensitive to occlusion artifacts"]
+    ],
+    "limitations_explicit": [],
+    "future_work": [
+      ["add_temporal_modeling", "Model longer motion context"]
+    ]
+  },
+  {
+    "paper_id": "mesh_001",
+    "problem": "human_mesh_reconstruction",
+    "methods": [
+      ["graph_conv_mesh_regressor", "Graph conv mesh regressor"]
+    ],
+    "datasets": [
+      ["human36m", "Human3.6M"]
+    ],
+    "limitations_implied": [
+      ["requires_dense_annotations", "Needs dense annotations"]
+    ],
+    "limitations_explicit": [
+      ["performance_drops", "Lower accuracy on outdoor captures"]
+    ],
+    "future_work": [
+      ["add_temporal_modeling", "Leverage video supervision"]
+    ]
+  }
+]
+
