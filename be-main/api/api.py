@@ -91,7 +91,7 @@ class ResearchRequest(BaseModel):
     topics: Optional[List[str]] = None  # Optional explicit topics to process
     papers_per_topic: int = 5  # Number of papers to fetch per topic
     use_reranking: bool = True  # Whether to use vector-based reranking (default: True)
-    broad_search_multiplier: int = 10  # Multiplier for broad search when reranking (default: 10)
+    broad_search_multiplier: int = 4  # Multiplier for broad search when reranking (fewer arXiv calls)
 
 
 class ReviewRequest(BaseModel):

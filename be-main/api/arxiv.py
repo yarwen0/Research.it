@@ -203,7 +203,7 @@ class ArxivClient:
         self,
         user_query: str,
         desired_count: int,
-        broad_search_multiplier: int = 10,
+        broad_search_multiplier: int = 4,
         embedding_model: str = "sentence-transformers/all-minilm-l12-v2"
     ) -> List[Any]:
         """
@@ -504,7 +504,7 @@ class ArxivClient:
         delay_between_downloads: float = 3.0,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         use_reranking: bool = True,
-        broad_search_multiplier: int = 10
+        broad_search_multiplier: int = 4
     ) -> List[Dict[str, Any]]:
         """
         Search for papers and extract text from all results.
