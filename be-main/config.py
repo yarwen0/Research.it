@@ -18,16 +18,22 @@ def _truthy(val: str | None) -> bool:
 
 GEMINI_API_KEY = _maybe("GEMINI_API_KEY")
 OPENROUTER_API_KEY = _maybe("OPENROUTER_API_KEY")
-LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' or 'openrouter'; auto-detected when unset
+LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama'; auto-detected when unset
+
+# Ollama (local models; no API key, no rate limits). Enable with LLM_PROVIDER=ollama.
+OLLAMA_BASE_URL = _maybe("OLLAMA_BASE_URL") or "http://localhost:11434"
+OLLAMA_MODEL = _maybe("OLLAMA_MODEL") or "qwen2.5:7b"
+OLLAMA_EMBED_MODEL = _maybe("OLLAMA_EMBED_MODEL") or "nomic-embed-text"
 
 # When using Gemini chat, embeddings still default to Gemini. Set OPENROUTER_FOR_EMBEDDINGS=1
 # to route high-volume embeddings through OpenRouter instead (needs a paid / non-exhausted key).
 OPENROUTER_FOR_EMBEDDINGS = _truthy(os.getenv("OPENROUTER_FOR_EMBEDDINGS"))
 
-if not GEMINI_API_KEY and not OPENROUTER_API_KEY:
+if (LLM_PROVIDER or "").strip().lower() != "ollama" and not GEMINI_API_KEY and not OPENROUTER_API_KEY:
     raise RuntimeError(
-        "No LLM provider configured. Set GEMINI_API_KEY (recommended; "
-        "https://aistudio.google.com/apikey) or OPENROUTER_API_KEY in your .env file."
+        "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
+        "(no key needed), or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
+        "or OPENROUTER_API_KEY in your .env file."
     )
 
 # Back-compat: keep OPENROUTER_API_KEY non-null so existing imports do not crash.
