@@ -24,7 +24,7 @@ from core import (
     create_llm_client,
 )
 from config import OPENROUTER_API_KEY, GEMINI_API_KEY
-from api.arxiv import ArxivClient, TopicGenerator
+from api.arxiv import ArxivClient, TopicGenerator, ArxivRateLimitError
 from api.review import ReviewManager
 from utils.graph import TrendsCreator
 from gap_finder import GapFinder, Paper
@@ -223,20 +223,31 @@ async def arxiv_research_stream(
                     f"will rerank and select top {papers_per_topic}"
                 )
             
-            papers = await loop.run_in_executor(
-                None,
-                arxiv_client.search_and_extract_papers,
-                topic,
-                papers_per_topic,
-                None,  # download_dir
-                None,  # max_pages - extract all pages
-                False,  # cleanup - keep downloaded PDFs
-                1.0,   # delay_between_downloads
-                None,  # progress_callback
-                use_reranking,
-                broad_search_multiplier
-            )
-            
+            try:
+                papers = await loop.run_in_executor(
+                    None,
+                    arxiv_client.search_and_extract_papers,
+                    topic,
+                    papers_per_topic,
+                    None,  # download_dir
+                    None,  # max_pages - extract all pages
+                    False,  # cleanup - keep downloaded PDFs
+                    1.0,   # delay_between_downloads
+                    None,  # progress_callback
+                    use_reranking,
+                    broad_search_multiplier
+                )
+            except ArxivRateLimitError as e:
+                # arXiv is throttling/unavailable; every topic will fail the same
+                # way, so report a clear error and stop instead of hanging.
+                logger.error(f"Aborting research run: {e}")
+                yield SSEUpdate(
+                    status=StatusType.ERROR,
+                    message=str(e)
+                ).to_sse()
+                await asyncio.sleep(0)
+                return
+
             logger.info(f"Found and extracted {len(papers)} papers for topic: '{topic}'")
             
             yield SSEUpdate(

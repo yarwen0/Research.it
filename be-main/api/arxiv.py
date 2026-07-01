@@ -29,6 +29,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+class ArxivRateLimitError(RuntimeError):
+    """Raised when arXiv keeps rate-limiting/failing after all retries.
+
+    Carries a user-actionable message so the API layer can forward it to the
+    client instead of the request hanging silently.
+    """
+
+
 # arXiv export API often returns 502/503 when overloaded. The official client
 # retries internally; we add another layer with backoff for any remaining errors.
 # Bounded so a rate-limited/slow arXiv surfaces an error in ~1-2 min instead of
@@ -77,7 +86,11 @@ def fetch_arxiv_search_results(
             )
             time.sleep(backoff)
             continue
-    raise last_err if last_err else RuntimeError("arXiv search failed")
+    # Retries exhausted on transient errors — surface a clear, actionable error.
+    raise ArxivRateLimitError(
+        "arXiv is rate-limiting or unavailable right now "
+        f"(last error: {last_err}). Please wait a few minutes and try again."
+    ) from last_err
 
 
 USER_AGENTS = [
