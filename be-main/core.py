@@ -94,7 +94,7 @@ class GeminiClient:
         seen = set()
         self.model_chain = [m for m in chain if not (m in seen or seen.add(m))]
 
-    def _post(self, url: str, body: dict, *, max_retries: int = 5) -> dict:
+    def _post(self, url: str, body: dict, *, max_retries: int = 2) -> dict:
         payload = json.dumps(body).encode("utf-8")
         headers = {"Content-Type": "application/json"}
 
@@ -110,7 +110,10 @@ class GeminiClient:
                 # Retry on rate limits and transient server errors
                 if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries:
                     attempt += 1
-                    delay = self._extract_retry_delay(detail) or min(60, 2 ** attempt)
+                    # Honor Gemini's suggested delay but cap it: the free tier can
+                    # ask for ~55s, which would stall the request for minutes across
+                    # retries. Cap so a quota error surfaces in the UI within ~40s.
+                    delay = min(20, self._extract_retry_delay(detail) or (2 ** attempt))
                     logger.warning(
                         f"Gemini HTTP {exc.code} on attempt {attempt}/{max_retries}, "
                         f"sleeping {delay}s before retry"
