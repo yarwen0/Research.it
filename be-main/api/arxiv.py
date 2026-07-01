@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 # arXiv export API often returns 502/503 when overloaded. The official client
 # retries internally; we add another layer with backoff for any remaining errors.
-ARXIV_SEARCH_MAX_ATTEMPTS = 8
+# Bounded so a rate-limited/slow arXiv surfaces an error in ~1-2 min instead of
+# hanging for many minutes. Worst case ≈ MAX_ATTEMPTS * backoff_cap.
+ARXIV_SEARCH_MAX_ATTEMPTS = 4
 
 
 def _arxiv_transient_error(exc: BaseException) -> bool:
@@ -59,7 +61,7 @@ def fetch_arxiv_search_results(
     Use this anywhere we call ``arxiv.Client().results(...)`` so transient 503s
     from export.arxiv.org do not abort the whole pipeline.
     """
-    c = client or arxiv.Client(page_size=20, delay_seconds=4.0, num_retries=5)
+    c = client or arxiv.Client(page_size=20, delay_seconds=4.0, num_retries=3)
     last_err: Optional[BaseException] = None
     for attempt in range(ARXIV_SEARCH_MAX_ATTEMPTS):
         try:
@@ -68,7 +70,7 @@ def fetch_arxiv_search_results(
             last_err = e
             if not _arxiv_transient_error(e):
                 raise
-            backoff = min(120.0, (2 ** attempt) * 6 + random.uniform(2, 8))
+            backoff = min(20.0, (2 ** attempt) * 3 + random.uniform(1, 4))
             logger.warning(
                 f"arXiv transient error ({e!s}), retry {attempt + 1}/{ARXIV_SEARCH_MAX_ATTEMPTS} "
                 f"after {backoff:.1f}s"
@@ -100,7 +102,7 @@ class ArxivClient:
         """
         self.max_results_per_topic = max_results_per_topic
         # Slightly slower pacing + extra internal retries to reduce 429/503 bursts.
-        self.client = arxiv.Client(page_size=20, delay_seconds=4.0, num_retries=5)
+        self.client = arxiv.Client(page_size=20, delay_seconds=4.0, num_retries=3)
         self.reference_extractor_fallback = reference_extractor_fallback
         self.openrouter_client = openrouter_client
     
