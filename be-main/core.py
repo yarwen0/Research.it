@@ -7,6 +7,7 @@ import logging
 
 import urllib
 import urllib.request
+import urllib.error
 
 from urllib.error import HTTPError
 import uuid
@@ -22,6 +23,9 @@ from config import (
     GEMINI_API_KEY,
     LLM_PROVIDER,
     OPENROUTER_FOR_EMBEDDINGS,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    OLLAMA_EMBED_MODEL,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,6 +255,119 @@ class GeminiClient:
         return all_embeddings
 
 
+def _to_ollama_format(response_format):
+    """Extract a JSON schema for Ollama structured output.
+
+    Ollama accepts a JSON schema object (or the string "json") in the ``format``
+    field. We reuse the OpenAI-style {type:'json_schema', json_schema:{schema}}
+    shape the rest of the app already produces.
+    """
+    if not response_format:
+        return None
+    if isinstance(response_format, dict) and response_format.get("type") == "json_schema":
+        schema = response_format.get("json_schema", {}).get("schema")
+        return schema or "json"
+    if isinstance(response_format, dict):
+        return response_format
+    return "json"
+
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _strip_reasoning(text: str) -> str:
+    """Remove <think>...</think> blocks some local models emit before answers."""
+    return _THINK_RE.sub("", text)
+
+
+class OllamaClient:
+    """Local Ollama client with the same surface as GeminiClient/OpenRouterClient
+    (chat_completion / get_embeddings).
+
+    Runs fully offline — no API key, no rate limits. Requires ``ollama serve``
+    to be running and the configured chat/embedding models to be pulled.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        base_url: str = "http://localhost:11434",
+        embed_model: str = "nomic-embed-text",
+        timeout: int = 120,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.embed_model = embed_model
+        # Local inference is slower than a hosted API; give long extractions room.
+        self.timeout = max(timeout, 300)
+
+    def _post(self, path: str, body: dict) -> dict:
+        payload = json.dumps(body).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"Ollama HTTP {exc.code}: {detail or exc.reason}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Cannot reach Ollama at {self.base_url} ({exc.reason}). "
+                "Start it with `ollama serve` and make sure the model is pulled."
+            ) from exc
+
+    def chat_completion(self, messages: List[Dict[str, str]], *, response_format: Dict | None) -> str:
+        body: Dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0.2},
+        }
+        fmt = _to_ollama_format(response_format)
+        if fmt is not None:
+            body["format"] = fmt
+
+        parsed = self._post("/api/chat", body)
+        content = (parsed.get("message") or {}).get("content", "") or ""
+        content = _strip_reasoning(content).strip()
+        # Strip markdown code fences some models wrap JSON in.
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+        if not content:
+            raise ValueError(f"Empty content in Ollama response: {parsed}")
+        return content
+
+    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+        """Embed texts with the local embedding model.
+
+        The ``model`` arg from callers names a hosted model id (OpenRouter/Gemini);
+        we ignore it and always use the configured local embedding model.
+        """
+        logger.info(f"Ollama embeddings: {len(texts)} texts via {self.embed_model}")
+        # Newer Ollama supports batch input on /api/embed.
+        try:
+            parsed = self._post("/api/embed", {"model": self.embed_model, "input": texts})
+            embs = parsed.get("embeddings")
+            if embs:
+                return embs
+        except RuntimeError as exc:
+            logger.warning(f"/api/embed failed ({exc}); falling back to /api/embeddings")
+        # Fallback: one request per text on the legacy endpoint.
+        vectors: list[list[float]] = []
+        for text in texts:
+            parsed = self._post("/api/embeddings", {"model": self.embed_model, "prompt": text})
+            vectors.append(parsed.get("embedding"))
+        return vectors
+
+
 def create_llm_client(*, model: str | None = None, timeout: int = 120):
     """
     Factory that returns the configured LLM client.
@@ -264,6 +381,14 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
 
     if not provider:
         provider = "gemini" if GEMINI_API_KEY else "openrouter"
+
+    if provider == "ollama":
+        return OllamaClient(
+            model=model or OLLAMA_MODEL,
+            base_url=OLLAMA_BASE_URL,
+            embed_model=OLLAMA_EMBED_MODEL,
+            timeout=timeout,
+        )
 
     if provider == "gemini":
         if not GEMINI_API_KEY:
