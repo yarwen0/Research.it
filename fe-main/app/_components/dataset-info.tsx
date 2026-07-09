@@ -445,7 +445,7 @@ export default function DatasetInfo({ datasets, processedPapers = [] }: DatasetI
                                               </span>
                                               <span>•</span>
                                               <span className="italic">
-                                                Referenced as: "{paper.original_name_used}"
+                                                Referenced as: &quot;{paper.original_name_used}&quot;
                                               </span>
                                             </div>
                                           </div>
@@ -517,7 +517,7 @@ export default function DatasetInfo({ datasets, processedPapers = [] }: DatasetI
                                             </span>
                                             <span>•</span>
                                             <span className="italic">
-                                              Referenced as: "{paper.original_name_used}"
+                                              Referenced as: &quot;{paper.original_name_used}&quot;
                                             </span>
                                             <span className="ml-2 text-gray-400">(details not available)</span>
                                           </div>
