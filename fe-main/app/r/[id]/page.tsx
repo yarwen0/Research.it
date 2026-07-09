@@ -213,7 +213,7 @@ function ResearchDetailContent() {
                 Research Not Found
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                This research result doesn't exist or has been deleted.
+                This research result doesn&apos;t exist or has been deleted.
               </p>
               <button 
                 onClick={() => router.push("/")}
