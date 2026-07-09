@@ -1,7 +1,8 @@
 {
-  "name": "my-project",
+  "name": "researchit-frontend",
   "version": "0.1.0",
   "private": true,
+  "description": "Next.js web client for the Research.it research gap discovery engine.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
