@@ -1,5 +1,7 @@
 # Research.it
 
+[![CI](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml/badge.svg)](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml)
+
 **A research gap discovery engine.** Give it a topic and it searches arXiv, reads
 the papers, extracts a structured model of each one (problem → methods → datasets →
 limitations → future work), builds a citation graph, surfaces concrete research
