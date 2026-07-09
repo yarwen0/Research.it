@@ -88,6 +88,28 @@ class TestGapFinder:
         gaps = GapFinder(papers).find_future_work_gaps(top_k=10)
         assert any(g.future_work_label == "explore_zzz" for g in gaps)
 
+    def test_dataset_transfer_gaps_are_detected(self):
+        papers = [
+            make_paper(paper_id="a", problem="p", methods=["m1"], datasets=["d1"]),
+            make_paper(paper_id="b", problem="p", methods=["m2"], datasets=["d2"]),
+        ]
+        gaps = GapFinder(papers).find_dataset_transfer_gaps(top_k=10)
+        assert gaps, "expected at least one dataset-transfer gap"
+        for gap in gaps:
+            assert gap.gap_type == "dataset_transfer"
+            assert gap.method in {"m1", "m2"}
+            assert gap.dataset in {"d1", "d2"}
+
+    def test_limitation_gap_surfaces_saturated_limitation(self):
+        papers = [
+            make_paper(paper_id="a", problem="p", methods=["m1"],
+                       limitations_explicit=["lim"]),
+            make_paper(paper_id="b", problem="p", methods=["m1"],
+                       limitations_explicit=["lim"]),
+        ]
+        gaps = GapFinder(papers).find_limitation_gaps(top_k=10)
+        assert any(g.gap_type == "limitation_gap" and g.limitation == "lim" for g in gaps)
+
     def test_find_all_gaps_only_emits_known_types(self):
         papers = [
             make_paper(paper_id="a", problem="p", methods=["m1"], datasets=["d1"],
