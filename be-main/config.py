@@ -16,6 +16,17 @@ def _truthy(val: str | None) -> bool:
     return (val or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _int(key: str, default: int) -> int:
+    """Return an int env var, falling back to `default` when unset or invalid."""
+    raw = _maybe(key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 GEMINI_API_KEY = _maybe("GEMINI_API_KEY")
 OPENROUTER_API_KEY = _maybe("OPENROUTER_API_KEY")
 LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama'; auto-detected when unset
@@ -32,6 +43,10 @@ OPENROUTER_FOR_EMBEDDINGS = _truthy(os.getenv("OPENROUTER_FOR_EMBEDDINGS"))
 # Allowed browser origins for CORS, comma-separated (e.g. "https://app.example.com").
 # Defaults to "*" (any origin) for local development.
 CORS_ORIGINS = [o.strip() for o in (_maybe("CORS_ORIGINS") or "*").split(",") if o.strip()]
+
+# Host/port the API server binds to. Defaults preserve the original behavior.
+HOST = _maybe("HOST") or "0.0.0.0"
+PORT = _int("PORT", 8000)
 
 if (LLM_PROVIDER or "").strip().lower() != "ollama" and not GEMINI_API_KEY and not OPENROUTER_API_KEY:
     raise RuntimeError(
