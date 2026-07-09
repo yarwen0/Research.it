@@ -56,7 +56,7 @@ const LatexPreview = ({ pdfUrl, isCompiling, error }: { pdfUrl: string | null; i
       ) : (
         <div className="text-center text-gray-400">
           <p className="text-lg mb-2">No PDF preview available</p>
-          <p className="text-sm">Click "Compile" to generate a PDF preview</p>
+          <p className="text-sm">Click &quot;Compile&quot; to generate a PDF preview</p>
         </div>
       )}
     </div>
