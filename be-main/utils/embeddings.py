@@ -110,10 +110,13 @@ class EmbeddingManager:
             if len(chunk) > max_chunk_size:
                 logger.warning(f"Chunk ({len(chunk)} chars) exceeds max size, truncating to {max_chunk_size}")
                 chunk = chunk[:max_chunk_size]
-            
-            chunks.append(chunk.strip())
+
+            # Skip empty/whitespace-only chunks so we never embed a blank string.
+            stripped = chunk.strip()
+            if stripped:
+                chunks.append(stripped)
             start = end - overlap
-        
+
         return chunks
     
     def rank_chunks_by_relevance(
