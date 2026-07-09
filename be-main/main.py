@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.api import router as research_router
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, HOST, PORT
 
 
 # Create FastAPI app
@@ -43,7 +43,12 @@ async def health_check():
         "status": "healthy",
         "service": "Research Gap Discovery Engine",
         "endpoints": {
-            "research": "/api/research"
+            "research": "/api/research",
+            "create_review": "/api/create_review",
+            "reviews": "/api/reviews",
+            "review": "/api/reviews/{review_id}",
+            "compile_latex": "/api/latex/compile",
+            "graph": "/api/graph/{project_id}/",
         }
     }
 
@@ -51,8 +56,8 @@ async def health_check():
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=HOST,
+        port=PORT,
         reload=False,
         log_level="info"
     )
