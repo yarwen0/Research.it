@@ -430,7 +430,7 @@ export default function EditorPage() {
           {/* Footer */}
           <div className="bg-gray-100 border-t border-gray-300 px-4 py-2 flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              <span className="font-medium">Tips:</span> Click "Compile" to generate a PDF preview of your LaTeX document
+              <span className="font-medium">Tips:</span> Click &quot;Compile&quot; to generate a PDF preview of your LaTeX document
             </div>
             {generationComplete && reviewMetadata && (
               <div className="flex items-center gap-2">
