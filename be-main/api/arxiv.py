@@ -20,8 +20,6 @@ import numpy as np
 
 from core import OpenRouterClient, ReferenceParameterExtractorFallback
 
-from utils.regex import extract_references_from_string
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
