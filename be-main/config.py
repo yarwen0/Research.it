@@ -29,6 +29,10 @@ OLLAMA_EMBED_MODEL = _maybe("OLLAMA_EMBED_MODEL") or "nomic-embed-text"
 # to route high-volume embeddings through OpenRouter instead (needs a paid / non-exhausted key).
 OPENROUTER_FOR_EMBEDDINGS = _truthy(os.getenv("OPENROUTER_FOR_EMBEDDINGS"))
 
+# Allowed browser origins for CORS, comma-separated (e.g. "https://app.example.com").
+# Defaults to "*" (any origin) for local development.
+CORS_ORIGINS = [o.strip() for o in (_maybe("CORS_ORIGINS") or "*").split(",") if o.strip()]
+
 if (LLM_PROVIDER or "").strip().lower() != "ollama" and not GEMINI_API_KEY and not OPENROUTER_API_KEY:
     raise RuntimeError(
         "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
