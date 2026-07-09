@@ -1127,3 +1127,4 @@ def extract_references_from_string(text):
     # TODO: Implement proper reference extraction using regex patterns
     # For now, return empty list and let the fallback extractor handle all references
     return []
+    return []
