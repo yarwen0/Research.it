@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.api import router as research_router
+from config import CORS_ORIGINS
 
 
 # Create FastAPI app
@@ -15,7 +16,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=CORS_ORIGINS,  # configurable via CORS_ORIGINS env; defaults to "*"
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
