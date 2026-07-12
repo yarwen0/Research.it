@@ -789,7 +789,7 @@ class ReferenceGraph:
             "data": metadata,
             "processed": processed,
             "refs_to": [],
-            "refs_by": [],
+            "refs_from": [],
         }
         self.graph["nodes"][paper_id] = node
 
@@ -805,7 +805,7 @@ class ReferenceGraph:
             raise ValueError("Both nodes must exist in the graph to create an edge.")
 
         self.graph["nodes"][from_paper_id]["refs_to"].append(to_paper_id)
-        self.graph["nodes"][to_paper_id]["refs_by"].append(from_paper_id)
+        self.graph["nodes"][to_paper_id]["refs_from"].append(from_paper_id)
 
         self.graph["edges"].append({
             "id": uuid.uuid4().hex,
