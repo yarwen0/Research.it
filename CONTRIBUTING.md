@@ -20,10 +20,11 @@ cd be-main
 pip install -r requirements-dev.txt
 make test
 
-# Frontend lint
+# Frontend lint + tests
 cd ../fe-main
 pnpm install
 pnpm lint
+pnpm test
 ```
 
 ## Conventions
