@@ -19,7 +19,15 @@ cp .env.example .env.local     # optional — only to override the backend URL
 pnpm dev                        # http://localhost:3000
 ```
 
-Other scripts: `pnpm build`, `pnpm start`, `pnpm lint`.
+Other scripts: `pnpm build`, `pnpm start`, `pnpm lint`, `pnpm test`.
+
+## Tests
+
+Unit tests (via [Vitest](https://vitest.dev/)) cover the pure helpers in `lib/`:
+
+```bash
+pnpm test
+```
 
 ## Configuration
 
