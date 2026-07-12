@@ -72,7 +72,7 @@ export function transformPapers(papers: BackendPaper[]): FrontendPaper[] {
  * Check if a paper is in backend format
  */
 export function isBackendPaper(paper: any): paper is BackendPaper {
-  return paper && typeof paper === 'object' && 'paper_id' in paper;
+  return !!paper && typeof paper === 'object' && 'paper_id' in paper;
 }
 
 /**
