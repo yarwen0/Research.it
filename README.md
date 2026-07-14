@@ -1,12 +1,19 @@
+<div align="center">
+
+<img src="fe-main/public/logo.png" alt="Research.it logo" width="180" />
+
 # Research.it
 
-[![CI](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml/badge.svg)](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml)
+**A research gap discovery engine.**
 
-**A research gap discovery engine.** Give it a topic and it searches arXiv, reads
-the papers, extracts a structured model of each one (problem → methods → datasets →
-limitations → future work), builds a citation graph, surfaces concrete research
-gaps, and can draft a full literature review in LaTeX — streaming its progress to a
-web UI the whole way.
+[![CI](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml/badge.svg)](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+
+</div>
+
+Give it a topic and it searches arXiv, reads the papers, extracts a structured
+model of each one (problem → methods → datasets → limitations → future work),
+builds a citation graph, surfaces concrete research gaps, and can draft a full
+literature review in LaTeX — streaming its progress to a web UI the whole way.
 
 > Built at Hatchathon 2025.
 
