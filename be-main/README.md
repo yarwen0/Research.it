@@ -1,5 +1,7 @@
 # Research.it — Backend
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![pytest](https://img.shields.io/badge/tested_with-pytest-0A9EDC?logo=pytest&logoColor=white)
+
 FastAPI service that powers the [Research.it](../README.md) research gap discovery
 engine: arXiv search, LLM-based extraction, a symbolic gap finder, a citation
 graph, trend analysis, and LaTeX literature-review generation — all streamed to the
