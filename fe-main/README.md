@@ -1,5 +1,7 @@
 # Research.it — Frontend
 
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) ![Vitest](https://img.shields.io/badge/tested_with-vitest-6E9F18?logo=vitest&logoColor=white)
+
 Next.js 14 (App Router) web client for the [Research.it](../README.md) research gap
 discovery engine. It drives the backend pipeline, renders the streamed results as
 interactive charts and a citation graph, and provides a LaTeX editor for the
