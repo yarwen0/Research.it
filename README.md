@@ -52,6 +52,15 @@ Each subproject has its own README with details:
 - [`be-main/README.md`](be-main/README.md) — backend architecture, endpoints, config
 - [`fe-main/README.md`](fe-main/README.md) — frontend stack, pages, environment
 
+## Tech stack
+
+| Layer    | Technologies                                                                        |
+|----------|-------------------------------------------------------------------------------------|
+| Backend  | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX      |
+| Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape   |
+| AI       | Gemini · OpenRouter · Ollama (local) — chat + embeddings                             |
+| Tooling  | pytest, Vitest, ESLint, GitHub Actions CI                                            |
+
 ## Quickstart
 
 You need **Python 3.10+**, **Node 18+** with **pnpm**, and (optionally) a LaTeX
