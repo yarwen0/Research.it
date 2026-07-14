@@ -1,0 +1,5 @@
+# Vendored third-party code — excluded from GitHub's language statistics.
+be-main/utils/regex.py linguist-vendored
+
+# Generated lockfile — collapsed in diffs and excluded from language stats.
+fe-main/pnpm-lock.yaml linguist-generated
