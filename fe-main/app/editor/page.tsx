@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileEdit, Loader2, CheckCircle, AlertCircle, Download, BookOpen, FileCode } from "lucide-react";
@@ -51,7 +51,7 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 
-export default function EditorPage() {
+function EditorPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const reviewStore = useReviewStore();
@@ -459,5 +459,13 @@ export default function EditorPage() {
         </div>
       </div>
     </SidebarProvider>
+  );
+}
+
+export default function EditorPage() {
+  return (
+    <Suspense fallback={null}>
+      <EditorPageContent />
+    </Suspense>
   );
 }
