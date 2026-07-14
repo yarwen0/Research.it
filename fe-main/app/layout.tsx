@@ -14,12 +14,27 @@ const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-ibm-plex-mono",
 });
 
+const description =
+  "Discover research gaps, explore citation graphs, and draft literature reviews — powered by AI.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: "Research.it",
-  description:
-    "Discover research gaps, explore citation graphs, and draft literature reviews — powered by AI.",
+  description,
   icons: {
     icon: '/logo.png',
+  },
+  openGraph: {
+    title: "Research.it",
+    description,
+    images: ["/logo.png"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Research.it",
+    description,
+    images: ["/logo.png"],
   },
 };
 
