@@ -16,7 +16,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Research.it",
-  description: "Research Quickly with AI-powered assistance.",
+  description:
+    "Discover research gaps, explore citation graphs, and draft literature reviews — powered by AI.",
   icons: {
     icon: '/logo.png',
   },
