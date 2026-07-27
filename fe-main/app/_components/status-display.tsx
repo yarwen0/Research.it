@@ -203,7 +203,7 @@ export default function StatusDisplay({ updates, isLoading }: StatusDisplayProps
         </div>
 
         {/* Status Messages */}
-        <div ref={scrollRef} className="max-h-96 overflow-y-auto scroll-smooth">
+        <div ref={scrollRef} className="max-h-96 overflow-y-auto scroll-smooth" role="status" aria-live="polite">
           <AnimatePresence mode="popLayout">
             {/* Active/Processing Updates */}
             {activeUpdates.map((update, index) => {
