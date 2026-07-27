@@ -999,7 +999,7 @@ async def compile_latex_endpoint(request: LatexCompileRequest):
             def cleanup():
                 try:
                     os.unlink(tmp_file_path)
-                except:
+                except OSError:
                     pass
             
             return FileResponse(
