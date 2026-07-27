@@ -6,11 +6,11 @@ import { FileEdit, Loader2, CheckCircle, AlertCircle, Download, BookOpen, FileCo
 import StatusDisplay from "../_components/status-display";
 import ReviewHistorySidebar from "../_components/review-history-sidebar";
 import { Nav } from "../_components/nav";
-import { SSEUpdate, StatusType, StreamHandler } from "@/lib/stream_handler";
+import { SSEUpdate, StatusType } from "@/lib/stream_handler";
 import { useReviewStore } from "@/lib/review-store";
 import dynamic from "next/dynamic";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { compileLatex } from "@/lib/api";
+import { compileLatex, submitCreateReview } from "@/lib/api";
 import { BibliographyDialog } from "../_components/bibliography-dialog";
 
 const LatexMonacoEditor = dynamic(
@@ -47,8 +47,6 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
     {children}
   </button>
 );
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 
 function EditorPageContent() {
@@ -173,12 +171,8 @@ function EditorPageContent() {
     setUpdates([]);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/create_review`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      await submitCreateReview(
+        {
           saved_filepath: savedFilepath,
           paper_index: parseInt(paperIndex),
           paper_info: paperInfo || {
@@ -186,14 +180,8 @@ function EditorPageContent() {
             keywords: [],
             abstract: "",
           },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to start review generation: ${response.statusText}`);
-      }
-
-      const streamHandler = new StreamHandler({
+        },
+        {
         onUpdate: (update) => {
           console.log("SSE Update:", update);
           setUpdates((prev) => [...prev, update]);
@@ -246,8 +234,6 @@ function EditorPageContent() {
           setIsGenerating(false);
         },
       });
-
-      await streamHandler.processStream(response);
     } catch (error) {
       console.error("Error generating review:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";

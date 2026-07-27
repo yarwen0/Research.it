@@ -143,6 +143,56 @@ export async function fetchGraph(projectId: string): Promise<{ nodes: any[]; edg
   return data.graph_data;
 }
 
+export interface CreateReviewRequest {
+  saved_filepath: string;
+  paper_index: number;
+  paper_info: {
+    title: string;
+    keywords: string[];
+    abstract: string;
+  };
+}
+
+/**
+ * Submit a literature review generation request to the backend.
+ * Returns a StreamHandler that processes the SSE response.
+ */
+export async function submitCreateReview(
+  request: CreateReviewRequest,
+  callbacks: StreamHandlerCallbacks
+): Promise<StreamHandler> {
+  const url = `${API_BASE_URL}/api/create_review`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new APIError(
+        `Failed to start review generation: ${response.statusText}`,
+        response.status,
+        response
+      );
+    }
+
+    const streamHandler = new StreamHandler(callbacks);
+    await streamHandler.processStream(response);
+    return streamHandler;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    throw new APIError(`Network error: ${errorMessage}`);
+  }
+}
+
 /**
  * Compile LaTeX content to PDF
  * Sends LaTeX content to the backend and returns a PDF blob
