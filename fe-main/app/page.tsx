@@ -1,16 +1,14 @@
 "use client";
-import { Sparkles, History } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatInput, { SpeedMode } from "./_components/chat-input";
 import StatusDisplay from "./_components/status-display";
 import ResearchGraph from "./_components/research-graph";
-import GraphLegend from "./_components/graph-legend";
 import ResearchResults from "./_components/research-results";
 import { Nav } from "./_components/nav";
 import { HistorySidebar } from "./_components/history-sidebar";
 import { submitResearch, fetchGraph } from "@/lib/api";
-import { SSEUpdate, StatusType } from "@/lib/stream_handler";
+import { SSEUpdate } from "@/lib/stream_handler";
 import { saveResponse, type ResearchResponse } from "@/lib/response-store";
 import { ensureFrontendFormat, transformPapers } from "@/lib/paper-transform";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
