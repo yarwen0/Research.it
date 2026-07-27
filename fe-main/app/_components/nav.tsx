@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
