@@ -25,6 +25,7 @@ cd ../fe-main
 pnpm install
 pnpm lint
 pnpm test
+pnpm build
 ```
 
 ## Conventions
