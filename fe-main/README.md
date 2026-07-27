@@ -33,9 +33,10 @@ pnpm test
 
 ## Configuration
 
-| Variable              | Default                  | Purpose                        |
-|-----------------------|--------------------------|--------------------------------|
-| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000`  | Base URL of the backend API.   |
+| Variable                   | Default                  | Purpose                        |
+|----------------------------|--------------------------|--------------------------------|
+| `NEXT_PUBLIC_API_URL`      | `http://127.0.0.1:8000`  | Base URL of the backend API.   |
+| `NEXT_PUBLIC_SITE_URL`     | (unset)                  | Canonical site URL for Open Graph / Twitter metadata. |
 
 ## Tech stack
 
