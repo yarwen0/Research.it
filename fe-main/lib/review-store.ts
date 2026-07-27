@@ -289,7 +289,7 @@ class ReviewStore {
    * Generate a unique ID for a review
    */
   private generateId(): string {
-    return `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `review_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   }
 
   /**
