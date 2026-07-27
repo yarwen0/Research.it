@@ -101,6 +101,13 @@ class ResearchRequest(BaseModel):
             raise ValueError("user_prompt must not be empty")
         return stripped
 
+    @field_validator("num_topics", "papers_per_topic", "broad_search_multiplier")
+    @classmethod
+    def counts_must_be_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("must be at least 1")
+        return v
+
 
 class ReviewRequest(BaseModel):
     """Model for review creation request"""
