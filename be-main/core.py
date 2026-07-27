@@ -793,7 +793,7 @@ class ReferenceGraph:
         }
         self.graph["nodes"][paper_id] = node
 
-        print(f"Created node for paper_id: {paper_id}")
+        logger.debug("Created node for paper_id: %s", paper_id)
 
         return paper_id
 
@@ -814,7 +814,7 @@ class ReferenceGraph:
             "edge_type": edge_type
         })
 
-        print(f"Created {edge_type} edge from {from_paper_id} to {to_paper_id}")
+        logger.debug("Created %s edge from %s to %s", edge_type, from_paper_id, to_paper_id)
 
         # if self.graph[from_paper_id].get("references") is None:
         #     self.graph[from_paper_id]["references"] = []
