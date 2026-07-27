@@ -1014,8 +1014,16 @@ async def get_graph_endpoint(project_id: str):
         processed_nodes = []
         processed_edges = []
 
+        nodes = reference_graph.graph.get("nodes") or {}
+        edges = reference_graph.graph.get("edges") or []
+        if not nodes:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Graph not found for project {project_id}",
+            )
+
         # Process all nodes (papers and authors)
-        for node in reference_graph.graph["nodes"].values():
+        for node in nodes.values():
             node_id = node["paper_id"]
             node_data = node["data"]
             is_processed = node.get("processed", False)
@@ -1038,7 +1046,7 @@ async def get_graph_endpoint(project_id: str):
             })
 
         # Process all edges (citations and authorships)
-        for edge in reference_graph.graph["edges"]:
+        for edge in edges:
             edge_data = {
                 **edge,
                 "edge_type": edge.get("edge_type", "citation"),
