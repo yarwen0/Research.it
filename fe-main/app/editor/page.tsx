@@ -73,7 +73,18 @@ function EditorPageContent() {
   const reviewId = searchParams.get('id');
 
   // Parse paper info from URL parameter
-  const paperInfo = paperInfoParam ? JSON.parse(paperInfoParam) : null;
+  let paperInfo: { title?: string; keywords?: string[]; abstract?: string } | null = null;
+  if (paperInfoParam) {
+    try {
+      paperInfo = JSON.parse(paperInfoParam);
+    } catch {
+      paperInfo = {
+        title: paperTitle || "Untitled",
+        keywords: [],
+        abstract: "",
+      };
+    }
+  }
 
   // Get current review data from store
   const currentReview = currentReviewId ? reviewStore.getReview(currentReviewId) : null;
