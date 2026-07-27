@@ -8,7 +8,7 @@ import ResearchGraph from "@/app/_components/research-graph";
 import ResearchResults from "@/app/_components/research-results";
 import { Nav } from "@/app/_components/nav";
 import { HistorySidebar } from "@/app/_components/history-sidebar";
-import { submitResearch } from "@/lib/api";
+import { submitResearch, fetchGraph } from "@/lib/api";
 import { SSEUpdate } from "@/lib/stream_handler";
 import { SidebarProvider, SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { getResponseById, saveResponse, type ResearchResponse } from "@/lib/response-store";
@@ -40,6 +40,8 @@ function ResearchDetailContent() {
   const [isStatusExpanded, setIsStatusExpanded] = useState(false);
   const [speedMode, setSpeedMode] = useState<SpeedMode>('fast');
   const [currentPrompt, setCurrentPrompt] = useState("");
+  const [graphNodes, setGraphNodes] = useState<any[]>([]);
+  const [graphEdges, setGraphEdges] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -66,6 +68,26 @@ function ResearchDetailContent() {
         // Load progress updates if available
         if (data.progressUpdates) {
           setUpdates(data.progressUpdates);
+        }
+
+        const projectId = data.project_id;
+        if (projectId) {
+          fetchGraph(projectId).then((graphData) => {
+            if (graphData?.nodes) {
+              setGraphNodes(graphData.nodes.map((n: any) => ({
+                id: n.data.id,
+                label: n.data.title || n.data.label || n.data.id,
+                type: n.data.node_type || "paper",
+              })));
+            }
+            if (graphData?.edges) {
+              setGraphEdges(graphData.edges.map((e: any) => ({
+                source: e.data.source,
+                target: e.data.target,
+                label: e.data.edge_type,
+              })));
+            }
+          }).catch(console.error);
         }
       }
       setIsInitialLoading(false);
@@ -145,6 +167,7 @@ function ResearchDetailContent() {
             processed_papers: update.result?.processed_papers || [], // Raw papers for reference
             suggested_papers: update.result?.suggested_papers || [], // Frontend-ready papers
             saved_filepath: update.result?.saved_filepath,
+            project_id: update.result?.project_id,
             trends: update.result?.trends || null,
             datasets: update.result?.datasets || null,
             progressUpdates: collectedUpdates,
@@ -248,8 +271,8 @@ function ResearchDetailContent() {
                   className="w-full space-y-4"
                 >
                   <ResearchGraph 
-                    nodes={response.graphData?.nodes} 
-                    edges={response.graphData?.edges}
+                    nodes={graphNodes.length > 0 ? graphNodes : response.graphData?.nodes}
+                    edges={graphEdges.length > 0 ? graphEdges : response.graphData?.edges}
                   />
                 </motion.div>
               )}
