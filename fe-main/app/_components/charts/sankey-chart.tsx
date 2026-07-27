@@ -37,15 +37,8 @@ interface SankeyChartVisualizationProps {
 }
 
 export default function SankeyChartVisualization({ chart }: SankeyChartVisualizationProps) {
-  console.log("=== SANKEY CHART DEBUG ===");
-  console.log("Chart config:", chart.config);
-  console.log("Data points count:", chart.dataPoints?.length);
-  console.log("Data points sample:", chart.dataPoints?.slice(0, 5));
-  console.log("Sankey metadata:", chart.sankey);
-  
   const { data, options } = useMemo(() => {
     if (!chart.dataPoints || chart.dataPoints.length === 0) {
-      console.warn("No data points available for Sankey chart");
       return { data: null, options: null };
     }
 
@@ -57,8 +50,6 @@ export default function SankeyChartVisualization({ chart }: SankeyChartVisualiza
         point.size
       ])
     ];
-
-    console.log("✅ Transformed data for Google Charts:", googleChartsData);
 
     const chartOptions = {
       sankey: {
