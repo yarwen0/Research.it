@@ -194,6 +194,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         disabled={isLoading}
         onKeyDown={handleKeyDown}
         rows={1}
+        aria-label="Research query"
       />
 
       <div className="flex items-center justify-between">
@@ -202,6 +203,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onClick={() => {/* TODO: Implement file upload */}}
             className={`${buttonConfig.className} hover:bg-primary/50 text-gray-600 dark:text-gray-300 transition-colors rounded-md inline-flex items-center justify-center disabled:opacity-50`}
             disabled={isLoading}
+            aria-label="Attach file (not yet available)"
           >
             <Paperclip size={iconSizes.imageIcon} />
           </button>
@@ -215,6 +217,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 disabled={isLoading}
+                aria-label="Research speed mode"
+                aria-haspopup="listbox"
+                aria-expanded={isDropdownOpen}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 <span className="text-blue-600 dark:text-blue-400">{currentMode.icon}</span>
@@ -269,6 +274,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onClick={onSendMessage}
             disabled={isLoading || !input.trim()}
             className={`${buttonConfig.className} transition-all duration-200 disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 rounded-md inline-flex items-center justify-center`}
+            aria-label="Submit research"
           >
             <Send size={iconSizes.sendIcon} />
           </button>
