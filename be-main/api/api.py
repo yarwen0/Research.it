@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pylatex import Document, NoEscape
 
 from core import (
@@ -92,6 +92,14 @@ class ResearchRequest(BaseModel):
     papers_per_topic: int = 5  # Number of papers to fetch per topic
     use_reranking: bool = True  # Whether to use vector-based reranking (default: True)
     broad_search_multiplier: int = 4  # Multiplier for broad search when reranking (fewer arXiv calls)
+
+    @field_validator("user_prompt")
+    @classmethod
+    def user_prompt_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("user_prompt must not be empty")
+        return stripped
 
 
 class ReviewRequest(BaseModel):
