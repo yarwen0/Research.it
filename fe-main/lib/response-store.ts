@@ -17,6 +17,7 @@ export interface ResearchResponse {
   processed_papers: any[]; // Raw backend papers with paper_id, extraction, normalized, etc.
   suggested_papers: any[]; // Papers in frontend format (title, keywords, abstract) - ready for display
   saved_filepath?: string;
+  project_id?: string;
   trends: any; // Research metrics and analysis data
   datasets?: any; // Dataset information from backend
   // Research progress details (all SSE updates)

@@ -148,6 +148,7 @@ export default function Home() {
             processed_papers: update.result?.processed_papers || [], // Raw papers for reference
             suggested_papers: update.result?.suggested_papers || [], // Frontend-ready papers
             saved_filepath: update.result?.saved_filepath,
+            project_id: update.result?.project_id,
             trends: update.result?.trends || null,
             datasets: update.result?.datasets || null,
             progressUpdates: collectedUpdates,
