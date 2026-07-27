@@ -122,10 +122,6 @@ export default function MetricsChart({ metrics, processedPapers = [] }: MetricsC
   const charts = useMemo(() => {
     if (!metrics) return [];
     
-    // Debug logging
-    console.log("=== METRICS DEBUG ===");
-    console.log("All metrics keys:", Object.keys(metrics));
-    
     const processedCharts = Object.entries(metrics || {})
       .filter(([key, value]) => {
         // Skip metadata and topics_summary (handled separately)
@@ -133,21 +129,13 @@ export default function MetricsChart({ metrics, processedPapers = [] }: MetricsC
         
         // Filter out the old topic_coverage chart since we're replacing it
         if (key === 'topic_coverage') {
-          console.log(`⚠️ Skipping legacy topic_coverage chart`);
           return false;
         }
         
         if (!value || typeof value !== 'object') {
-          console.log(`❌ ${key}: Invalid - not an object`);
           return false;
         }
         const chartData = value as ChartData;
-        
-        console.log(`\n📊 Chart: ${key}`);
-        console.log("  Config:", JSON.stringify(chartData.config, null, 2));
-        console.log("  Data Points Count:", chartData.dataPoints?.length || 0);
-        console.log("  Data Points Sample:", JSON.stringify(chartData.dataPoints?.slice(0, 2), null, 2));
-        console.log("  Series:", JSON.stringify(chartData.series, null, 2));
         
         const specialChartTypes = ['wordcloud', 'sankey', 'heatmap'];
         const requiresSeries = !specialChartTypes.includes(chartData.config?.type);
@@ -157,13 +145,10 @@ export default function MetricsChart({ metrics, processedPapers = [] }: MetricsC
                         chartData.dataPoints.length > 0 &&
                         (!requiresSeries || (Array.isArray(chartData.series) && chartData.series.length > 0));
         
-        console.log(`  Valid: ${isValid ? '✅' : '❌'}`);
-        
         return isValid;
       })
       .map(([key, value]) => ({ key, ...value as ChartData }));
     
-    console.log("\n=== END METRICS DEBUG ===\n");
     return processedCharts;
   }, [metrics]);
 
