@@ -183,7 +183,6 @@ function EditorPageContent() {
         },
         {
         onUpdate: (update) => {
-          console.log("SSE Update:", update);
           setUpdates((prev) => [...prev, update]);
           
           // Store update in review store
@@ -230,7 +229,6 @@ function EditorPageContent() {
           setIsGenerating(false);
         },
         onEnd: () => {
-          console.log("Stream ended");
           setIsGenerating(false);
         },
       });
