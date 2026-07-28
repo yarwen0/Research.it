@@ -219,8 +219,6 @@ export default function ResearchGraph({ nodes, edges }: ResearchGraphProps) {
     const displayNodes = nodes || mockNodes;
     const displayEdges = edges || mockEdges;
 
-    console.log("ResearchGraph: Rendering with", displayNodes.length, "nodes and", displayEdges.length, "edges");
-
     // Theme-aware colors
     const bgColor = isDark ? '#1e293b' : '#ffffff';
     const textColor = isDark ? '#f1f5f9' : '#1e293b';
