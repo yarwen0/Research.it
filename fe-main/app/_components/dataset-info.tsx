@@ -96,9 +96,6 @@ export default function DatasetInfo({ datasets, processedPapers = [] }: DatasetI
   useEffect(() => {
     const paperDetailsMap = new Map<string, PaperDetails>();
 
-    console.log("📚 Loading paper details for datasets...");
-    console.log("  processedPapers count:", processedPapers?.length || 0);
-
     // First, try to use the provided processedPapers from current response
     if (processedPapers && processedPapers.length > 0) {
       processedPapers.forEach((paper: any) => {
@@ -120,13 +117,10 @@ export default function DatasetInfo({ datasets, processedPapers = [] }: DatasetI
             keywords,
             pdf_url,
           });
-          
-          console.log(`  ✅ Loaded paper: ${paper.paper_id} - ${title.substring(0, 50)}...`);
         }
       });
     } else {
       // Fallback: Load from all stored responses in localStorage
-      console.log("  Falling back to localStorage...");
       const responses = getStoredResponses();
       responses.forEach((response) => {
         if (response.processed_papers && Array.isArray(response.processed_papers)) {
@@ -155,7 +149,6 @@ export default function DatasetInfo({ datasets, processedPapers = [] }: DatasetI
       });
     }
 
-    console.log(`  📊 Total papers loaded: ${paperDetailsMap.size}`);
     setPapersMap(paperDetailsMap);
   }, [processedPapers]);
 
