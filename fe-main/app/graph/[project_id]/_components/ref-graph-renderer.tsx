@@ -216,8 +216,7 @@ export default function RefGraphRenderer({
             selectedNodeRef.current = node;
             setSelectedNode(node);
             const nodeData = graph.getNodeAttributes(node);
-            console.log('Clicked node:', node, nodeData);
-            
+
             // Set selected state for clicked node and its neighbors
             const neighbors = new Set<string>();
             neighbors.add(node);
