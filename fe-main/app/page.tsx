@@ -40,7 +40,6 @@ export default function Home() {
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    console.log("Sending message:", input);
     const promptText = input;
     setCurrentPrompt(promptText);
     setIsLoading(true);
@@ -61,7 +60,6 @@ export default function Home() {
     try {
       await submitResearch(input, config.num_topics, config.papers_per_topic, {
         onUpdate: (update) => {
-          console.log("Update:", update);
           // Add timestamp to each update
           const timestampedUpdate = {
             ...update,
@@ -70,11 +68,8 @@ export default function Home() {
           setUpdates((prev) => [...prev, timestampedUpdate]);
           collectedUpdates.push(timestampedUpdate);
         },
-        onProgress: (update) => {
-          console.log("Progress:", update.result);
-        },
+        onProgress: () => {},
         onCompleted: (update) => {
-          console.log("Completed:", update.result);
           setIsLoading(false);
           setShowGraph(true);
 
@@ -104,8 +99,6 @@ export default function Home() {
           
           // Backend now returns suggested_papers in frontend format (title, keywords, abstract)
           if (update.result?.suggested_papers && Array.isArray(update.result.suggested_papers)) {
-            console.log("Setting suggested papers:", update.result.suggested_papers.length);
-            console.log("First suggested paper:", update.result.suggested_papers[0]);
             setResearchPapers(update.result.suggested_papers);
           } else {
             console.warn("No suggested_papers found, falling back to processed_papers transformation");
@@ -123,7 +116,6 @@ export default function Home() {
           
           // Extract metrics from the result (under trends key)
           if (update.result?.trends) {
-            console.log("Setting research metrics:", update.result.trends);
             setResearchMetrics(update.result.trends);
           } else {
             console.warn("No trends found in result:", update.result);
@@ -131,7 +123,6 @@ export default function Home() {
           
           // Extract datasets from the result
           if (update.result?.datasets) {
-            console.log("Setting research datasets:", update.result.datasets);
             setResearchDatasets(update.result.datasets);
           } else {
             console.warn("No datasets found in result:", update.result);
@@ -160,7 +151,6 @@ export default function Home() {
             graphData: update.result,
             speedMode: speedMode,
           });
-          console.log("Saved response with ID:", savedResponse.id);
           setCurrentResponseId(savedResponse.id);
         },
         onError: (error) => {
@@ -168,7 +158,6 @@ export default function Home() {
           setIsLoading(false);
         },
         onEnd: () => {
-          console.log("Stream ended");
           setIsLoading(false);
         },
       });
