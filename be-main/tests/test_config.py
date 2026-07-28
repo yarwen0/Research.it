@@ -51,3 +51,8 @@ class TestInt:
     def test_invalid_value_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv("RESEARCHIT_TEST_INT", "not-a-number")
         assert _int("RESEARCHIT_TEST_INT", 42) == 42
+
+
+def test_host_and_port_defaults():
+    assert config.HOST == "0.0.0.0"
+    assert config.PORT == 8000
