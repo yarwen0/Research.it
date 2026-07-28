@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from utils.regex import compute_months, compute_years, remove_year
+from utils.regex import compute_months, compute_years, remove_year, extract_references_from_string
 
 
 class TestComputeMonths:
@@ -40,3 +40,8 @@ class TestRemoveYear:
         result = remove_year("keep 2020 drop 2019", year="2019")
         assert "2019" not in result
         assert "2020" in result
+
+
+class TestExtractReferencesFromString:
+    def test_stub_returns_empty_list(self):
+        assert extract_references_from_string("Smith et al. (2020). Some paper.") == []
