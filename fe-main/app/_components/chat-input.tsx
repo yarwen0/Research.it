@@ -200,6 +200,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => {/* TODO: Implement file upload */}}
             className={`${buttonConfig.className} hover:bg-primary/50 text-gray-600 dark:text-gray-300 transition-colors rounded-md inline-flex items-center justify-center disabled:opacity-50`}
             disabled={isLoading}
@@ -271,6 +272,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
           
           <button
+            type="button"
             onClick={onSendMessage}
             disabled={isLoading || !input.trim()}
             className={`${buttonConfig.className} transition-all duration-200 disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 rounded-md inline-flex items-center justify-center`}

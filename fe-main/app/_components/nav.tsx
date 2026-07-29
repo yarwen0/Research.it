@@ -78,6 +78,7 @@ export function Nav({ title }: NavProps) {
           </Link>
 
           <button
+            type="button"
             onClick={toggleDarkMode}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             aria-label="Toggle dark mode"
