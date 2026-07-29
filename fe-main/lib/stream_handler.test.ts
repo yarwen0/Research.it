@@ -87,4 +87,11 @@ describe("StreamHandler.processStream", () => {
     );
     expect(cb.onUpdate).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects a response with a null body", async () => {
+    const cb = spies();
+    await expect(
+      new StreamHandler(cb).processStream(new Response(null, { status: 200 })),
+    ).rejects.toThrow("Response body is null");
+  });
 });
