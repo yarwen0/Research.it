@@ -390,30 +390,38 @@ export default function RefGraphRenderer({
             {/* Graph Controls */}
             <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
                 <button
+                    type="button"
                     onClick={handleZoomIn}
                     className="p-2 bg-card rounded-lg border border-border shadow-sm hover:bg-accent transition-colors"
                     title="Zoom In"
+                    aria-label="Zoom in"
                 >
                     <ZoomIn className="w-4 h-4 text-foreground" />
                 </button>
                 <button
+                    type="button"
                     onClick={handleZoomOut}
                     className="p-2 bg-card rounded-lg border border-border shadow-sm hover:bg-accent transition-colors"
                     title="Zoom Out"
+                    aria-label="Zoom out"
                 >
                     <ZoomOut className="w-4 h-4 text-foreground" />
                 </button>
                 <button
+                    type="button"
                     onClick={handleReset}
                     className="p-2 bg-card rounded-lg border border-border shadow-sm hover:bg-accent transition-colors"
                     title="Reset View"
+                    aria-label="Reset view"
                 >
                     <Maximize2 className="w-4 h-4 text-foreground" />
                 </button>
                 <button
+                    type="button"
                     onClick={handleRelayout}
                     className="p-2 bg-card rounded-lg border border-border shadow-sm hover:bg-accent transition-colors"
                     title="Relayout Graph"
+                    aria-label="Relayout graph"
                 >
                     <RefreshCw className="w-4 h-4 text-foreground" />
                 </button>
