@@ -25,6 +25,11 @@ describe("formatTimestamp", () => {
     const threeDaysAgo = new Date("2026-07-23T15:00:00").getTime();
     expect(formatTimestamp(threeDaysAgo)).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
   });
+
+  it("shows month and day for timestamps older than a week", () => {
+    const twoWeeksAgo = new Date("2026-07-10T15:00:00").getTime();
+    expect(formatTimestamp(twoWeeksAgo)).toMatch(/^[A-Z][a-z]{2} \d{1,2}$/);
+  });
 });
 
 describe("formatDuration", () => {
