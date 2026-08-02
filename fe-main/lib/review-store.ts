@@ -3,6 +3,8 @@
  * Stores everything received from the backend for easy history loading
  */
 
+import { useState, useEffect } from 'react';
+
 export interface ReviewData {
   id: string;
   paperTitle?: string;
@@ -409,5 +411,3 @@ export function useReviewStore() {
   };
 }
 
-// Re-export useState for the hook
-import { useState, useEffect } from 'react';
