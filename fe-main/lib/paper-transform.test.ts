@@ -70,6 +70,12 @@ describe("transformPaper", () => {
     );
     expect(result.keywords).toEqual([]);
   });
+
+  it("truncates long topics to 50 characters in keywords", () => {
+    const longTopic = "a".repeat(60);
+    const result = transformPaper(makeBackendPaper({ authors: [], topic: longTopic }));
+    expect(result.keywords).toEqual([longTopic.substring(0, 50)]);
+  });
 });
 
 describe("transformPapers", () => {
