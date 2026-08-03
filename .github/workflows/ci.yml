@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# A new push makes an in-flight run for the same ref pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  backend:
-    name: Backend tests
+  backend-lint:
+    name: Backend lint and types
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,11 +29,121 @@ jobs:
             be-main/requirements-dev.txt
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
-      - name: Run tests
-        run: pytest
+      - name: Ruff
+        run: ruff check .
+      - name: mypy
+        run: mypy
+
+  backend-tests:
+    name: Backend tests (SQLite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: be-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            be-main/requirements.txt
+            be-main/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests with coverage
+        # The floor ratchets up as the pre-refactor modules gain tests. It is
+        # here to stop coverage sliding, not to claim the suite is thorough.
+        run: pytest --cov --cov-report=term-missing --cov-fail-under=50
+
+  backend-postgres:
+    name: Backend schema (Postgres)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: be-main
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: researchit
+          POSTGRES_PASSWORD: researchit
+          POSTGRES_DB: researchit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://researchit:researchit@localhost:5432/researchit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            be-main/requirements.txt
+            be-main/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Apply migrations
+        # SQLite is forgiving in ways Postgres is not, so the schema is proven
+        # against the engine production actually runs.
+        run: alembic upgrade head
+      - name: Check migrations match the models
+        # Fails if a model was edited without generating a migration.
+        run: alembic check
+
+  evals:
+    name: Gap detection quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: be-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            be-main/requirements.txt
+            be-main/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Report gap detection metrics
+        # Printed to the log so a quality change is visible on every PR, not
+        # only when the regression gate in tests/test_evals.py trips.
+        run: python -m evals.run_eval
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./be-main
+          push: false
+          # TeX Live is ~700 MB and irrelevant to whether the image builds.
+          build-args: INSTALL_LATEX=false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./fe-main
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   frontend:
-    name: Frontend lint
+    name: Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,6 +160,8 @@ jobs:
           cache-dependency-path: fe-main/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
       - name: Lint
         run: pnpm lint
       - name: Unit tests
