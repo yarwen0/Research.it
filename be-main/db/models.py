@@ -17,11 +17,13 @@ Shape notes:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Optional
 
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
@@ -228,6 +230,88 @@ class OntologyTerm(Base):
     original_text: Mapped[str] = mapped_column(Text, default="")
 
     project: Mapped["Project"] = relationship(back_populates="ontology_terms")
+
+
+class JobStatus(str, Enum):
+    """Lifecycle of a background research run."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Job(Base):
+    """A research run executing in the background.
+
+    Previously the pipeline *was* the HTTP response: a client that navigated
+    away killed the run mid-flight, losing every paper already processed. The
+    run now outlives the connection, and a reconnecting client resumes from
+    the events recorded here.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), default=None, index=True
+    )
+
+    status: Mapped[JobStatus] = mapped_column(
+        SAEnum(JobStatus, native_enum=False, length=16),
+        default=JobStatus.PENDING,
+        index=True,
+    )
+    user_prompt: Mapped[str] = mapped_column(Text, default="")
+    # Request parameters, so a run can be described (or replayed) after the
+    # fact without the original request.
+    params: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    error: Mapped[Optional[str]] = mapped_column(Text, default=None)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+    events: Mapped[list["JobEvent"]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="JobEvent.sequence",
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"<Job {self.id} {self.status}>"
+
+
+class JobEvent(Base):
+    """One progress event from a job, in order.
+
+    `sequence` is what makes reconnection work: a client resumes by asking for
+    everything after the last sequence number it saw.
+    """
+
+    __tablename__ = "job_events"
+    __table_args__ = (
+        UniqueConstraint("job_id", "sequence", name="uq_job_events_job_sequence"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+
+    status: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    job: Mapped["Job"] = relationship(back_populates="events")
 
 
 class Review(Base):
