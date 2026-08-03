@@ -38,15 +38,27 @@ python_version = "3.12"
 files = ["db", "services", "utils", "api", "config.py", "main.py", "rate_limit.py"]
 exclude = "(^utils/regex\\.py$|^alembic/)"
 
-# Enabled incrementally. The strict flags below are on; the remaining ones
-# (disallow_untyped_defs in particular) need the older modules annotated
-# first, and turning them on before that would mean a wall of errors nobody
-# reads.
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
 no_implicit_optional = true
 check_untyped_defs = true
+
+# A ratchet, not a permanent exemption. Modules written or rewritten since the
+# refactor are checked; the pre-existing ones are silenced so CI can gate on
+# mypy today instead of waiting on a big annotation pass. Delete entries from
+# this list as each module is annotated — never add to it.
+[[tool.mypy.overrides]]
+module = [
+    "api.arxiv",
+    "api.review",
+    "core",
+    "gap_finder",
+    "utils.embeddings",
+    "utils.graph",
+    "utils.datasets",
+]
+ignore_errors = true
 
 # Third-party packages without published type information.
 [[tool.mypy.overrides]]

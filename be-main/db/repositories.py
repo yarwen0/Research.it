@@ -11,9 +11,10 @@ import logging
 import re
 from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
 from db.models import Author, Citation, OntologyTerm, Paper, PaperAuthor, Project, Review
@@ -468,4 +469,6 @@ class ReviewRepository:
         result = self.session.execute(
             delete(Review).where(Review.review_id == review_id)
         )
-        return bool(result.rowcount)
+        # DELETE always yields a CursorResult; the generic Result type mypy
+        # infers from execute() does not expose rowcount.
+        return bool(cast("CursorResult[Any]", result).rowcount)

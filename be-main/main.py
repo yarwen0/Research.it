@@ -39,7 +39,9 @@ app = FastAPI(
 # Rate limiting. SlowAPIMiddleware applies the default per-client budget to
 # every route; the expensive endpoints add their own tighter limits on top.
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+# Starlette types handlers against the base Exception; the narrower signature
+# here is what slowapi actually calls it with.
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
 # Add CORS middleware
