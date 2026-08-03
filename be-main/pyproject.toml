@@ -1,0 +1,84 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    ".venv",
+    "alembic/versions",
+    # Vendored from CERN refextract under its own license; kept as upstream
+    # wrote it so it can be diffed against future releases.
+    "utils/regex.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",    # line length is the formatter's job, not a lint error
+    "B008",    # FastAPI's Depends() in defaults is the documented pattern
+    "SIM108",  # ternaries are not always clearer than an if/else
+    "RUF002",  # em-dashes in prose docstrings are deliberate
+    "RUF003",  # ...and in comments too
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately shadow and re-import to isolate module state.
+"tests/*" = ["E402", "F811"]
+"conftest.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["db", "services", "utils", "api", "config.py", "main.py", "rate_limit.py"]
+exclude = "(^utils/regex\\.py$|^alembic/)"
+
+# Enabled incrementally. The strict flags below are on; the remaining ones
+# (disallow_untyped_defs in particular) need the older modules annotated
+# first, and turning them on before that would mean a wall of errors nobody
+# reads.
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Third-party packages without published type information.
+[[tool.mypy.overrides]]
+module = [
+    "arxiv.*",
+    "feedparser.*",
+    "fitz.*",
+    "pylatex.*",
+    "pymupdf.*",
+    "sklearn.*",
+    "slowapi.*",
+    "magic.*",
+    "inspire_utils.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    ".venv/*",
+    "tests/*",
+    "alembic/*",
+    "evals/*",
+    "*_example.py",
+    "utils/regex.py",
+]
+
+[tool.coverage.report]
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
