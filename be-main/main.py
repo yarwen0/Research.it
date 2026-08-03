@@ -1,9 +1,12 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from api.api import router as research_router
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
+from rate_limit import limiter, rate_limit_handler
 
 
 # Create FastAPI app
@@ -12,6 +15,12 @@ app = FastAPI(
     description="API for extracting research parameters and discovering gaps",
     version="1.0.0"
 )
+
+# Rate limiting. SlowAPIMiddleware applies the default per-client budget to
+# every route; the expensive endpoints add their own tighter limits on top.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
