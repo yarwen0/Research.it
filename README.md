@@ -6,7 +6,7 @@
 
 **A research gap discovery engine.**
 
-[![CI](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml/badge.svg)](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+[![CI](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml/badge.svg)](https://github.com/yarwen0/Research.it/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 
 </div>
 
@@ -58,7 +58,7 @@ Each subproject has its own README with details:
 |-----------|------------------------------------------------------------------------------------|
 | Backend   | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX     |
 | Data      | Postgres / SQLite, SQLAlchemy 2, Alembic                                            |
-| Frontend  | Next.js 14, React 18, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
+| Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
 | AI        | Gemini · OpenRouter · Ollama (local) — chat + embeddings                            |
 | Observability | structlog (JSON logs), per-request correlation ids                             |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
@@ -91,7 +91,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups (Fly.io + Vercel).
 
 ### Native
 
-You need **Python 3.10+**, **Node 18+** with **pnpm**, and (optionally) a LaTeX
+You need **Python 3.10+**, **Node 20.9+** with **pnpm**, and (optionally) a LaTeX
 toolchain (`pdflatex`, e.g. BasicTeX/TeX Live) for PDF review compilation.
 
 #### 1. Backend
