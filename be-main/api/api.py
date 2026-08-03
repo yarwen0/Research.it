@@ -29,6 +29,7 @@ from api.arxiv import ArxivClient
 from api.review import ReviewManager
 from core import ReferenceParameterExtractorFallback
 from services.events import StatusType
+from services.jobs import JobNotFoundError, get_job, start_job, tail_events
 from services.research_pipeline import ResearchPipeline
 from utils.latex import (
     MAX_LATEX_BYTES,
@@ -105,37 +106,32 @@ class SSEUpdate(BaseModel):
         return f"data: {self.model_dump_json()}\n\n"
 
 
-async def arxiv_research_stream(
-    user_prompt: str,
-    topics: Optional[List[str]],
-    num_topics: int,
-    papers_per_topic: int,
-    use_reranking: bool,
-    broad_search_multiplier: int
-) -> AsyncGenerator[str, None]:
-    """Adapt the research pipeline's progress events to the SSE wire format.
+async def job_event_stream(job_id: str, *, after: int = -1) -> AsyncGenerator[str, None]:
+    """Adapt a job's recorded events to the SSE wire format.
 
-    The pipeline itself is in services.research_pipeline and knows nothing
-    about HTTP, so moving it behind a job queue would replace this adapter
-    without touching it.
+    The job id goes out first so a client that loses its connection knows
+    which run to resume, then every event carries its sequence number so it
+    knows where to resume from.
     """
-    pipeline = ResearchPipeline(
-        user_prompt=user_prompt,
-        topics=topics,
-        num_topics=num_topics,
-        papers_per_topic=papers_per_topic,
-        use_reranking=use_reranking,
-        broad_search_multiplier=broad_search_multiplier,
-    )
+    yield SSEUpdate(
+        status=StatusType.PROCESSING,
+        message="Research job started",
+        result={"job_id": job_id},
+    ).to_sse()
+    await asyncio.sleep(0)
 
-    async for event in pipeline.run():
+    async for event in tail_events(job_id, after=after):
+        result = dict(event["result"] or {})
+        result["sequence"] = event["sequence"]
+        result["job_id"] = job_id
+
         yield SSEUpdate(
-            status=event.status,
-            message=event.message,
-            result=event.result,
+            status=StatusType(event["status"]),
+            message=event["message"],
+            result=result,
         ).to_sse()
         # Hand control back so the frame is flushed rather than buffered
-        # behind the next stage's blocking work.
+        # behind the next event.
         await asyncio.sleep(0)
 
 
@@ -157,22 +153,72 @@ async def research_endpoint(request: Request, payload: ResearchRequest):
     
     The final COMPLETED message includes a 'trends' key with all visualization data
     ready for MUI X Charts in the React frontend.
+
+    The run executes as a background job, so losing this connection stops the
+    streaming, not the work. Every event carries a `job_id` and `sequence`;
+    reconnect at GET /api/jobs/{job_id}/events?after={sequence} to pick up
+    where it left off.
     """
+    pipeline = ResearchPipeline(
+        user_prompt=payload.user_prompt,
+        topics=payload.topics,
+        num_topics=payload.num_topics,
+        papers_per_topic=payload.papers_per_topic,
+        use_reranking=payload.use_reranking,
+        broad_search_multiplier=payload.broad_search_multiplier,
+    )
+    job_id = start_job(
+        payload.user_prompt,
+        payload.model_dump(),
+        pipeline,
+    )
+
     return StreamingResponse(
-        arxiv_research_stream(
-            user_prompt=payload.user_prompt,
-            topics=payload.topics,
-            num_topics=payload.num_topics,
-            papers_per_topic=payload.papers_per_topic,
-            use_reranking=payload.use_reranking,
-            broad_search_multiplier=payload.broad_search_multiplier
-        ),
+        job_event_stream(job_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         }
+    )
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_endpoint(job_id: str):
+    """Current status of a research job.
+
+    Lets a client that lost its stream find out whether the run is still going
+    before deciding to resume.
+    """
+    try:
+        return get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+
+@router.get("/jobs/{job_id}/events")
+async def stream_job_events_endpoint(job_id: str, after: int = -1):
+    """Resume a job's SSE stream.
+
+    Args:
+        after: last sequence number already received. The default replays the
+            run from the beginning, so a client that missed everything still
+            gets the full picture.
+    """
+    try:
+        get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    return StreamingResponse(
+        job_event_stream(job_id, after=after),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
