@@ -10,12 +10,34 @@
 name: researchit
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-researchit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-researchit}
+      POSTGRES_DB: ${POSTGRES_DB:-researchit}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # The backend applies migrations on boot, so it must not start before
+      # the server is actually accepting connections.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-researchit}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ./be-main
       args:
         INSTALL_LATEX: ${INSTALL_LATEX:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
+      DATABASE_URL: >-
+        postgresql+psycopg://${POSTGRES_USER:-researchit}:${POSTGRES_PASSWORD:-researchit}@postgres:5432/${POSTGRES_DB:-researchit}
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -75,4 +97,5 @@ services:
 
 volumes:
   backend-data:
+  postgres-data:
   ollama-models:
