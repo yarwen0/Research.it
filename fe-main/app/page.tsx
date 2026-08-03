@@ -36,6 +36,7 @@ export default function Home() {
   const [researchStartTime, setResearchStartTime] = useState<number | null>(null);
   const [graphNodes, setGraphNodes] = useState<any[]>([]);
   const [graphEdges, setGraphEdges] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -47,6 +48,9 @@ export default function Home() {
     setHasStartedResearch(true);
     setGraphNodes([]);
     setGraphEdges([]);
+    // Clear any failure from the previous run, so a retry does not show a
+    // stale error next to fresh progress.
+    setError(null);
     
     // Record start time
     const startTime = Date.now();
@@ -153,16 +157,22 @@ export default function Home() {
           });
           setCurrentResponseId(savedResponse.id);
         },
-        onError: (error) => {
-          console.error("Error:", error);
+        onError: (message) => {
+          console.error("Error:", message);
+          setError(message);
           setIsLoading(false);
         },
         onEnd: () => {
           setIsLoading(false);
         },
       });
-    } catch (error) {
-      console.error("Failed to submit research:", error);
+    } catch (err) {
+      console.error("Failed to submit research:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to start research. Please try again.",
+      );
       setIsLoading(false);
     }
 
@@ -293,6 +303,18 @@ export default function Home() {
             onSpeedModeChange={setSpeedMode}
           />
         </motion.div>
+
+        {/* Failure notice — errors used to reach only the console, so a failed
+            run looked identical to one that simply stopped. */}
+        {error && (
+          <div
+            role="alert"
+            data-testid="research-error"
+            className="w-full rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+          >
+            <span className="font-medium">Research failed:</span> {error}
+          </div>
+        )}
 
         {/* Status Display - below input, collapsible when graph is active */}
         <AnimatePresence mode="wait">
