@@ -26,7 +26,12 @@ config = context.config
 # ConfigParser treats % as interpolation, and passwords in URLs contain them.
 config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
-if config.config_file_name is not None:
+# Only when alembic is driving. Running migrations in-process at app startup
+# would otherwise have fileConfig tear down the handlers the app just
+# installed, and every log line afterwards reverts to the default format.
+if config.config_file_name is not None and config.attributes.get(
+    "configure_logger", True
+):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata

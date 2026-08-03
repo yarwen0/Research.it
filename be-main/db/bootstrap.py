@@ -26,6 +26,10 @@ def _alembic_config() -> Config:
     config.set_main_option("script_location", str(_ALEMBIC_INI.parent / "alembic"))
     # ConfigParser reads % as interpolation; passwords in URLs contain them.
     config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+    # The app configures logging before this runs; letting alembic apply
+    # alembic.ini's logging config would replace those handlers and silently
+    # revert every subsequent line to the default format.
+    config.attributes["configure_logger"] = False
     return config
 
 
