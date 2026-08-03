@@ -9,7 +9,7 @@ import tempfile
 import os
 import uuid
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, field_validator
@@ -23,7 +23,14 @@ from core import (
     ReferenceGraph,
     create_llm_client,
 )
-from config import OPENROUTER_API_KEY, GEMINI_API_KEY
+from config import (
+    OPENROUTER_API_KEY,
+    GEMINI_API_KEY,
+    RATE_LIMIT_COMPILE,
+    RATE_LIMIT_RESEARCH,
+    RATE_LIMIT_REVIEW,
+)
+from rate_limit import limiter
 from api.arxiv import ArxivClient, TopicGenerator, ArxivRateLimitError
 from api.review import ReviewManager
 from utils.graph import TrendsCreator
@@ -642,10 +649,14 @@ async def arxiv_research_stream(
 
 
 @router.post("/research")
-async def research_endpoint(request: ResearchRequest):
+@limiter.limit(RATE_LIMIT_RESEARCH)
+async def research_endpoint(request: Request, payload: ResearchRequest):
     """
     SSE endpoint for arXiv-based research extraction.
-    
+
+    Rate limited hard: one call fans out to dozens of arXiv downloads and a
+    long chain of LLM requests.
+
     This endpoint:
     1. Takes a user's research prompt (and optional topics) and generates topics via LLM when needed
     2. Searches arXiv for papers on each topic
@@ -658,12 +669,12 @@ async def research_endpoint(request: ResearchRequest):
     """
     return StreamingResponse(
         arxiv_research_stream(
-            user_prompt=request.user_prompt,
-            topics=request.topics,
-            num_topics=request.num_topics,
-            papers_per_topic=request.papers_per_topic,
-            use_reranking=request.use_reranking,
-            broad_search_multiplier=request.broad_search_multiplier
+            user_prompt=payload.user_prompt,
+            topics=payload.topics,
+            num_topics=payload.num_topics,
+            papers_per_topic=payload.papers_per_topic,
+            use_reranking=payload.use_reranking,
+            broad_search_multiplier=payload.broad_search_multiplier
         ),
         media_type="text/event-stream",
         headers={
@@ -783,7 +794,8 @@ async def create_review_stream(
 
 
 @router.post("/create_review")
-async def create_review_endpoint(request: ReviewRequest):
+@limiter.limit(RATE_LIMIT_REVIEW)
+async def create_review_endpoint(request: Request, payload: ReviewRequest):
     """
     SSE endpoint for comprehensive literature review generation.
     
@@ -809,9 +821,9 @@ async def create_review_endpoint(request: ReviewRequest):
     """
     return StreamingResponse(
         create_review_stream(
-            saved_filepath=request.saved_filepath,
-            paper_index=request.paper_index,
-            paper_info=request.paper_info,
+            saved_filepath=payload.saved_filepath,
+            paper_index=payload.paper_index,
+            paper_info=payload.paper_info,
             num_base_papers=2,
             num_arxiv_papers_per_variant=5,
             num_relevant_chunks=50
@@ -908,7 +920,8 @@ class LatexCompileRequest(BaseModel):
 
 
 @router.post("/latex/compile")
-async def compile_latex_endpoint(request: LatexCompileRequest):
+@limiter.limit(RATE_LIMIT_COMPILE)
+async def compile_latex_endpoint(request: Request, payload: LatexCompileRequest):
     """
     Compile LaTeX text to PDF and return the PDF file.
 
@@ -930,7 +943,7 @@ async def compile_latex_endpoint(request: LatexCompileRequest):
         # pdflatex is a blocking subprocess run three times over; keep it off
         # the event loop so it cannot stall concurrent SSE streams.
         pdf_content = await loop.run_in_executor(
-            None, compile_latex_to_pdf, request.latex_text
+            None, compile_latex_to_pdf, payload.latex_text
         )
     except LatexUnavailableError as e:
         logger.error("LaTeX toolchain unavailable: %s", e)
