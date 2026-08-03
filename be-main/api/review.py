@@ -18,8 +18,10 @@ import arxiv
 
 from api.arxiv import fetch_arxiv_search_results
 from core import OpenRouterClient
+from db.repositories import ReviewRepository
+from db.session import session_scope
 from utils.embeddings import EmbeddingManager
-from utils.paths import resolve_data_path
+from utils.paths import DATA_DIR, resolve_data_path
 from constants.prompts.review_system_prompt import REVIEW_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -44,10 +46,8 @@ class ReviewManager:
         self.arxiv_client = arxiv_client
         self.embedding_manager = EmbeddingManager(openrouter_client)
         
-        self.reviews_dir = Path("data/reviews")
-        self.reviews_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.pdfs_dir = Path("data/pdfs")
+        # Reviews live in the database; only the downloaded PDFs stay on disk.
+        self.pdfs_dir = DATA_DIR / "pdfs"
         self.pdfs_dir.mkdir(parents=True, exist_ok=True)
     
     def _load_saved_papers(self, saved_filepath: str) -> Dict[str, Any]:
@@ -704,15 +704,9 @@ Generate the complete LaTeX review now:"""
         yield emit_progress("processing", "Finalizing review...")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        review_filename = f"review_{timestamp}.tex"
-        review_filepath = self.reviews_dir / review_filename
-        
-        with open(review_filepath, 'w', encoding='utf-8') as f:
-            f.write(latex_review)
-        
+
         bibliography = self._create_bibliography_metadata(relevant_chunks)
-        
-        metadata_filepath = self.reviews_dir / f"review_{timestamp}_metadata.json"
+
         metadata = {
             "topic": topic,
             "keywords": keywords,
@@ -724,7 +718,6 @@ Generate the complete LaTeX review now:"""
             "num_processed_papers": len(all_papers),
             "num_chunks": len(chunks),
             "num_relevant_chunks": len(relevant_chunks),
-            "review_filepath": str(review_filepath),
             "bibliography": bibliography,
             "papers_used": [
                 {
@@ -737,10 +730,18 @@ Generate the complete LaTeX review now:"""
                 for p in all_papers
             ]
         }
-        
-        with open(metadata_filepath, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
-                
+
+        with session_scope() as session:
+            ReviewRepository(session).save(
+                timestamp,
+                latex_review,
+                title=paper_info.get("title", "") or topic,
+                source_filepath=saved_filepath,
+                bibliography=bibliography,
+                metadata=metadata,
+            )
+
+
         review_data = {
             "id": timestamp,  # Use timestamp as unique ID
             "paperTitle": paper_info.get("title", ""),
@@ -769,7 +770,6 @@ Generate the complete LaTeX review now:"""
                 "high_priority_chunks": high_priority_count,
                 "high_priority_selected": high_priority_selected
             },
-            "reviewFilepath": str(review_filepath),
             "createdAt": int(datetime.now().timestamp() * 1000),  # Milliseconds since epoch
             "updatedAt": int(datetime.now().timestamp() * 1000),
             "status": "completed"
@@ -824,27 +824,19 @@ Generate the complete LaTeX review now:"""
             Review data if found, None otherwise
         """
         logger.info(f"Retrieving review with ID: {review_id}")
-        
-        review_filepath = self.reviews_dir / f"review_{review_id}.tex"
-        metadata_filepath = self.reviews_dir / f"review_{review_id}_metadata.json"
-        
-        if not review_filepath.exists():
-            logger.warning(f"Review not found: {review_filepath}")
-            return None
-        
-        with open(review_filepath, 'r', encoding='utf-8') as f:
-            latex_content = f.read()
-        
-        metadata = {}
-        if metadata_filepath.exists():
-            with open(metadata_filepath, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
-        
-        return {
-            "review_id": review_id,
-            "latex_content": latex_content,
-            "metadata": metadata
-        }
+
+        with session_scope() as session:
+            review = ReviewRepository(session).get(review_id)
+
+            if review is None:
+                logger.warning("Review not found: %s", review_id)
+                return None
+
+            return {
+                "review_id": review.review_id,
+                "latex_content": review.latex_content,
+                "metadata": review.review_metadata or {},
+            }
     
     def list_reviews(self, saved_filepath: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -857,33 +849,24 @@ Generate the complete LaTeX review now:"""
             List of review metadata dictionaries
         """
         logger.info(f"Listing reviews for filepath: {saved_filepath or 'all'}")
-        
-        reviews = []
-        
-        for metadata_file in self.reviews_dir.glob("review_*_metadata.json"):
-            try:
-                with open(metadata_file, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                
-                # Filter by saved_filepath if provided
-                if saved_filepath and metadata.get("saved_filepath") != saved_filepath:
-                    continue
-                
-                review_id = metadata_file.stem.replace("review_", "").replace("_metadata", "")
-                
-                reviews.append({
-                    "review_id": review_id,
-                    "topic": metadata.get("topic", ""),
-                    "keywords": metadata.get("keywords", []),
-                    "timestamp": metadata.get("timestamp", ""),
-                    "num_papers": metadata.get("num_processed_papers", 0),
-                    "review_filepath": metadata.get("review_filepath", "")
-                })
-                
-            except Exception as e:
-                logger.error(f"Error reading metadata file {metadata_file}: {e}")
-        
-        reviews.sort(key=lambda x: x["timestamp"], reverse=True)
-        
+
+        # Previously a directory glob that opened and parsed every metadata
+        # file just to filter and sort them in Python.
+        with session_scope() as session:
+            rows = ReviewRepository(session).list(saved_filepath)
+
+            reviews = [
+                {
+                    "review_id": row.review_id,
+                    "topic": (row.review_metadata or {}).get("topic", ""),
+                    "keywords": (row.review_metadata or {}).get("keywords", []),
+                    "timestamp": (row.review_metadata or {}).get("timestamp", ""),
+                    "num_papers": (row.review_metadata or {}).get(
+                        "num_processed_papers", 0
+                    ),
+                }
+                for row in rows
+            ]
+
         logger.info(f"Found {len(reviews)} reviews")
         return reviews
