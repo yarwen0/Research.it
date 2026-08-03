@@ -141,31 +141,6 @@ class ArxivClient:
             logger.error(f"Failed to extract references using LLM: {str(e)}")
             return []
 
-        processed_refs = []
-        invalid_refs = []
-
-        for i, r in enumerate(ref):
-            if "title" not in r:
-                invalid_refs.append(r)
-            else:
-                processed_refs.append(r)
-
-        processed_refs.extend(json.loads(response).get("references", []))
-
-        # # Batch process invalid refs
-        # REF_BATCH_SIZE = 5
-        # for i in range(0, len(invalid_refs), REF_BATCH_SIZE):
-        #     batch = invalid_refs[i:i+REF_BATCH_SIZE]
-        #     inputs = [
-        #         r.get("raw_ref") or r.get("raw") or json.dumps(r, ensure_ascii=False)
-        #         for r in batch
-        #     ]
-        #     responses = self.reference_extractor_fallback.extract(inputs)
-        #     for j, response in enumerate(responses.refs):
-        #         processed_refs.append(json.loads(response.model_dump_json()))
-
-        return processed_refs
-
     def search_papers(self, query: str, max_results: Optional[int] = None) -> List[Any]:
         """
         Search for papers on arXiv.
