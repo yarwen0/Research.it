@@ -175,10 +175,13 @@ function EditorPageContent() {
         {
           saved_filepath: savedFilepath,
           paper_index: parseInt(paperIndex),
-          paper_info: paperInfo || {
-            title: paperTitle || "Untitled",
-            keywords: [],
-            abstract: "",
+          // paperInfo is JSON parsed out of a query param, so every field is
+          // genuinely optional. Fill the gaps here rather than sending
+          // undefined into a body the backend types as required.
+          paper_info: {
+            title: paperInfo?.title || paperTitle || "Untitled",
+            keywords: paperInfo?.keywords ?? [],
+            abstract: paperInfo?.abstract ?? "",
           },
         },
         {
