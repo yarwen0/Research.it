@@ -55,7 +55,6 @@ pnpm test
 | `/editor` `/editor/[id]`| LaTeX editor for generated reviews.             |
 | `/graph/[project_id]`   | Interactive citation / authorship graph.        |
 | `/r/[id]`               | Shared, read-only view of a review.             |
-| `/pricing`              | Pricing page.                                   |
 
 ## Project structure
 
@@ -67,7 +66,6 @@ fe-main/
 │   ├── editor/             LaTeX review editor
 │   ├── graph/              Citation graph viewer
 │   ├── r/                  Shared review view
-│   ├── pricing/            Pricing page
 │   └── _components/        Feature components (charts, sidebars, results, …)
 ├── components/ui/          shadcn/ui primitives
 ├── lib/

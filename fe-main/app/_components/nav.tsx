@@ -70,13 +70,6 @@ export function Nav({ title }: NavProps) {
           >
             Editor
           </Link>
-          <Link
-            href="/pricing"
-            className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium"
-          >
-            Pricing
-          </Link>
-
           <button
             type="button"
             onClick={toggleDarkMode}
