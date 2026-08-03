@@ -44,6 +44,12 @@ OPENROUTER_FOR_EMBEDDINGS = _truthy(os.getenv("OPENROUTER_FOR_EMBEDDINGS"))
 # Defaults to "*" (any origin) for local development.
 CORS_ORIGINS = [o.strip() for o in (_maybe("CORS_ORIGINS") or "*").split(",") if o.strip()]
 
+# Credentialed CORS is only safe against an explicit origin allowlist. Starlette
+# responds to `allow_origins=["*"]` + `allow_credentials=True` by echoing back
+# whatever Origin it is given, which would let any site make credentialed calls
+# once auth exists — so credentials stay off while the wildcard is in play.
+CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
+
 # Host/port the API server binds to. Defaults preserve the original behavior.
 HOST = _maybe("HOST") or "0.0.0.0"
 PORT = _int("PORT", 8000)

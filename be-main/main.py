@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.api import router as research_router
-from config import CORS_ORIGINS, HOST, PORT
+from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
 
 
 # Create FastAPI app
@@ -17,7 +17,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,  # configurable via CORS_ORIGINS env; defaults to "*"
-    allow_credentials=True,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,  # off while origins are wildcarded
     allow_methods=["*"],
     allow_headers=["*"],
 )
