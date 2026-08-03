@@ -1,3 +1,4 @@
+import type { components } from "./api-types";
 import { StreamHandler, StreamHandlerCallbacks } from "./stream_handler";
 
 /**
@@ -6,13 +7,30 @@ import { StreamHandler, StreamHandlerCallbacks } from "./stream_handler";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /**
- * Research request payload
+ * Request and response shapes come from the backend's OpenAPI schema, so a
+ * change to a FastAPI model breaks the build here rather than at runtime.
+ *
+ * Regenerate with `pnpm generate:api-types` after changing the backend.
  */
-export interface ResearchRequest {
-  user_prompt: string;
-  num_topics: number;
-  papers_per_topic: number;
-}
+type Schemas = components["schemas"];
+
+/**
+ * The research request body.
+ *
+ * openapi-typescript marks any field carrying a default as required, which is
+ * right for a response and wrong for a request body — the server fills those
+ * in. Only `user_prompt` is in the schema's `required` list, so the rest are
+ * reconstructed as optional here.
+ */
+export type ResearchRequest = Pick<Schemas["ResearchRequest"], "user_prompt"> &
+  Partial<Omit<Schemas["ResearchRequest"], "user_prompt">>;
+export type GraphResponse = Schemas["GraphResponse"];
+export type GraphData = Schemas["GraphData"];
+export type GraphNode = Schemas["GraphNode"];
+export type GraphEdge = Schemas["GraphEdge"];
+export type JobResponse = Schemas["JobResponse"];
+export type ReviewResponse = Schemas["ReviewResponse"];
+export type ReviewListResponse = Schemas["ReviewListResponse"];
 
 /**
  * API Error class
@@ -54,7 +72,7 @@ export async function submitResearch(
 ): Promise<StreamHandler> {
   const url = `${API_BASE_URL}/api/research`;
   
-  const payload: ResearchRequest = { 
+  const payload: ResearchRequest = {
     user_prompt: text,
     num_topics: numTopics,
     papers_per_topic: papersPerTopic
@@ -135,23 +153,54 @@ export async function submitResearchAndCollect(
 /**
  * Fetch the citation graph for a completed research session
  */
-export async function fetchGraph(projectId: string): Promise<{ nodes: any[]; edges: any[] }> {
+export async function fetchGraph(projectId: string): Promise<GraphData> {
   const url = `${API_BASE_URL}/api/graph/${projectId}/`;
   const response = await fetch(url);
   if (!response.ok) throw new APIError(`Graph fetch failed: ${response.statusText}`, response.status);
-  const data = await response.json();
+  const data: GraphResponse = await response.json();
   return data.graph_data;
 }
 
-export interface CreateReviewRequest {
-  saved_filepath: string;
-  paper_index: number;
-  paper_info: {
-    title: string;
-    keywords: string[];
-    abstract: string;
-  };
+/**
+ * Fetch a research job's current status.
+ *
+ * Useful after a dropped stream: the run continues server-side, so this says
+ * whether it is still going before deciding to resume.
+ */
+export async function fetchJob(jobId: string): Promise<JobResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
+  if (!response.ok) {
+    throw new APIError(`Job fetch failed: ${response.statusText}`, response.status);
+  }
+  return response.json();
 }
+
+/**
+ * Resume streaming a research job that is already running.
+ *
+ * @param afterSequence - last sequence number already seen. Defaults to -1,
+ *   which replays the run from the start.
+ */
+export async function resumeResearch(
+  jobId: string,
+  callbacks: StreamHandlerCallbacks,
+  afterSequence: number = -1,
+): Promise<StreamHandler> {
+  const url = `${API_BASE_URL}/api/jobs/${jobId}/events?after=${afterSequence}`;
+  const response = await fetch(url, { headers: { Accept: "text/event-stream" } });
+
+  if (!response.ok) {
+    throw new APIError(`Failed to resume job: ${response.statusText}`, response.status);
+  }
+
+  const handler = new StreamHandler(callbacks);
+  handler.processStream(response).catch((error) => {
+    callbacks?.onError?.(error.message);
+  });
+  return handler;
+}
+
+export type CreateReviewRequest = Schemas["ReviewRequest"];
 
 /**
  * Submit a literature review generation request to the backend.
