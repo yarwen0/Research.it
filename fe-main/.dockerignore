@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+
+# Secrets — NEXT_PUBLIC_* values are supplied as build args instead
+.env
+.env.local
+.env.*.local
+
+.DS_Store
+.vscode/
