@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.api import router as research_router
+from api.schemas import DetailedHealthResponse, HealthResponse
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
 from db.bootstrap import ensure_schema
 from logging_config import configure_logging, get_logger
@@ -64,7 +65,7 @@ app.add_middleware(CorrelationIdMiddleware)
 app.include_router(research_router, prefix="/api", tags=["research"])
 
 
-@app.get("/")
+@app.get("/", response_model=HealthResponse)
 async def root():
     """Health check endpoint"""
     return {
@@ -74,7 +75,7 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", response_model=DetailedHealthResponse)
 async def health_check():
     """Detailed health check endpoint"""
     return {

@@ -11,7 +11,6 @@ import logging
 import os
 import tempfile
 from collections.abc import AsyncGenerator
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
@@ -20,6 +19,13 @@ from starlette.background import BackgroundTask
 
 from api.arxiv import ArxivClient
 from api.review import ReviewManager
+from api.schemas import (
+    GraphResponse,
+    JobResponse,
+    ReviewListResponse,
+    ReviewResponse,
+    SSEUpdate,
+)
 from config import (
     RATE_LIMIT_COMPILE,
     RATE_LIMIT_RESEARCH,
@@ -94,17 +100,6 @@ class ReviewRequest(BaseModel):
         if v < 0:
             raise ValueError("paper_index must not be negative")
         return v
-
-
-class SSEUpdate(BaseModel):
-    """Model for SSE updates sent to the frontend"""
-    status: StatusType
-    message: str
-    result: dict[str, Any] | None = None
-    
-    def to_sse(self) -> str:
-        """Convert to SSE format"""
-        return f"data: {self.model_dump_json()}\n\n"
 
 
 async def job_event_stream(job_id: str, *, after: int = -1) -> AsyncGenerator[str, None]:
@@ -185,7 +180,7 @@ async def research_endpoint(request: Request, payload: ResearchRequest):
     )
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job_endpoint(job_id: str):
     """Current status of a research job.
 
@@ -379,7 +374,7 @@ async def create_review_endpoint(request: Request, payload: ReviewRequest):
     )
 
 
-@router.get("/reviews/{review_id}")
+@router.get("/reviews/{review_id}", response_model=ReviewResponse)
 async def get_review_endpoint(review_id: str):
     """
     Retrieve a specific review by ID.
@@ -413,7 +408,7 @@ async def get_review_endpoint(review_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to retrieve review: {e!s}") from e
 
 
-@router.get("/reviews")
+@router.get("/reviews", response_model=ReviewListResponse)
 async def list_reviews_endpoint(saved_filepath: str | None = None):
     """
     List all reviews, optionally filtered by source dataset.
@@ -515,7 +510,7 @@ async def compile_latex_endpoint(request: Request, payload: LatexCompileRequest)
     )
 
 
-@router.get("/graph/{project_id}/")
+@router.get("/graph/{project_id}/", response_model=GraphResponse)
 async def get_graph_endpoint(project_id: str):
     """
     Endpoint to retrieve the reference graph for a given project ID.
