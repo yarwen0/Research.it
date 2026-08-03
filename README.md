@@ -152,6 +152,31 @@ pip install -r requirements-dev.txt
 make test
 ```
 
+## Does the gap finder actually work?
+
+Measured, not asserted. [`be-main/evals/`](be-main/evals/README.md) holds an
+18-paper benchmark with hand-labelled ground truth:
+
+```bash
+cd be-main && python -m evals.run_eval
+```
+
+On the shipped configuration: **precision 0.722, recall 0.188, F1 0.299.**
+
+The detector is precise and misses a lot — it returns 18 of 69 genuine gaps,
+because the API caps output at 5 per gap type. Raising that cap to 40 gives
+F1 0.548 at precision 0.489. Neither is obviously wrong for a UI showing a
+short list of suggestions, but it was not a trade-off anyone had made
+deliberately before it could be measured.
+
+Building the harness immediately surfaced a real defect: gap detection was
+**non-deterministic**, returning F1 between 0.425 and 0.520 on identical
+input, because tied scores were broken by `set` iteration order and Python
+randomises string hashing per process. Fixed, and pinned by a test that runs
+the finder under several `PYTHONHASHSEED` values.
+
+[Full methodology, per-type numbers, and an error analysis.](be-main/evals/README.md)
+
 ## License
 
 `be-main/utils/regex.py` is vendored from CERN's
