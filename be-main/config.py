@@ -1,7 +1,13 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()  # Load environment variables from a .env file if present
+
+# Anchored to this file so paths resolve the same regardless of working
+# directory. `utils.paths` re-exports the public form of this.
+_BASE_DIR = Path(__file__).resolve().parent
 
 
 def _maybe(key: str) -> str | None:
@@ -53,6 +59,19 @@ CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 # Host/port the API server binds to. Defaults preserve the original behavior.
 HOST = _maybe("HOST") or "0.0.0.0"
 PORT = _int("PORT", 8000)
+
+# --- Database --------------------------------------------------------------
+# SQLite keeps `git clone && make dev` working with no services to install;
+# compose and production point this at Postgres. The models and migrations are
+# the same either way, so the only difference is the URL.
+DATABASE_URL = _maybe("DATABASE_URL") or f"sqlite:///{_BASE_DIR / 'data' / 'researchit.db'}"
+
+# Pool sizing only applies to Postgres — SQLite ignores it.
+DB_POOL_SIZE = _int("DB_POOL_SIZE", 5)
+DB_MAX_OVERFLOW = _int("DB_MAX_OVERFLOW", 10)
+
+# Echo every statement. Noisy; useful when tracing an N+1.
+DB_ECHO = _truthy(os.getenv("DB_ECHO"))
 
 # --- Rate limiting ---------------------------------------------------------
 # A single /api/research call downloads dozens of PDFs and spends real LLM
