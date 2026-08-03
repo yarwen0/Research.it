@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,14 +8,24 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from api.api import router as research_router
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
+from db.bootstrap import ensure_schema
 from rate_limit import limiter, rate_limit_handler
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Bring the schema up to date before serving, so a fresh clone or a new
+    # container needs no separate migration step.
+    ensure_schema()
+    yield
 
 
 # Create FastAPI app
 app = FastAPI(
     title="Research Gap Discovery Engine API",
     description="API for extracting research parameters and discovering gaps",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Rate limiting. SlowAPIMiddleware applies the default per-client budget to

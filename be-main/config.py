@@ -73,6 +73,11 @@ DB_MAX_OVERFLOW = _int("DB_MAX_OVERFLOW", 10)
 # Echo every statement. Noisy; useful when tracing an N+1.
 DB_ECHO = _truthy(os.getenv("DB_ECHO"))
 
+# Apply migrations on startup. Convenient for local runs and single-container
+# deploys; turn off where migrations are an explicit release step, since
+# several workers booting at once should not all be driving DDL.
+AUTO_MIGRATE = not _truthy(os.getenv("AUTO_MIGRATE_DISABLED"))
+
 # --- Rate limiting ---------------------------------------------------------
 # A single /api/research call downloads dozens of PDFs and spends real LLM
 # budget, so the write endpoints are capped far tighter than the read ones.
