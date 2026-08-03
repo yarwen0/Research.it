@@ -1,7 +1,7 @@
-import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
+from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -10,14 +10,13 @@ from slowapi.middleware import SlowAPIMiddleware
 from api.api import router as research_router
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
 from db.bootstrap import ensure_schema
+from logging_config import configure_logging, get_logger
 from rate_limit import limiter, rate_limit_handler
 
-# Configured once, at the entry point. A library module calling basicConfig
-# would silently depend on being imported before anything else logs.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Configured once, at the entry point. A library module doing this would
+# silently depend on being imported before anything else logs.
+configure_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -25,7 +24,9 @@ async def lifespan(_app: FastAPI):
     # Bring the schema up to date before serving, so a fresh clone or a new
     # container needs no separate migration step.
     ensure_schema()
+    logger.info("api_started", host=HOST, port=PORT)
     yield
+    logger.info("api_stopped")
 
 
 # Create FastAPI app
@@ -52,6 +53,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Outermost, so every log line from a request — including ones emitted by the
+# middleware above — carries its id. A research run logs across several stages
+# and threads; without this, following one run through the output means going
+# by timestamp, which interleaves the moment two run at once.
+app.add_middleware(CorrelationIdMiddleware)
 
 # Include routers
 app.include_router(research_router, prefix="/api", tags=["research"])
