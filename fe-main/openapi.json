@@ -1,0 +1,912 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Research Gap Discovery Engine API",
+    "description": "API for extracting research parameters and discovering gaps",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/research": {
+      "post": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Research Endpoint",
+        "description": "SSE endpoint for arXiv-based research extraction.\n\nRate limited hard: one call fans out to dozens of arXiv downloads and a\nlong chain of LLM requests.\n\nThis endpoint:\n1. Takes a user's research prompt (and optional topics) and generates topics via LLM when needed\n2. Searches arXiv for papers on each topic\n3. Downloads, extracts, and processes papers through the extraction pipeline\n4. Generates trend analysis and visualization data\n5. Streams progress updates via SSE\n\nThe final COMPLETED message includes a 'trends' key with all visualization data\nready for MUI X Charts in the React frontend.\n\nThe run executes as a background job, so losing this connection stops the\nstreaming, not the work. Every event carries a `job_id` and `sequence`;\nreconnect at GET /api/jobs/{job_id}/events?after={sequence} to pick up\nwhere it left off.",
+        "operationId": "research_endpoint_api_research_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Get Job Endpoint",
+        "description": "Current status of a research job.\n\nLets a client that lost its stream find out whether the run is still going\nbefore deciding to resume.",
+        "operationId": "get_job_endpoint_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/events": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Stream Job Events Endpoint",
+        "description": "Resume a job's SSE stream.\n\nArgs:\n    after: last sequence number already received. The default replays the\n        run from the beginning, so a client that missed everything still\n        gets the full picture.",
+        "operationId": "stream_job_events_endpoint_api_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": -1,
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/create_review": {
+      "post": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Create Review Endpoint",
+        "description": "SSE endpoint for comprehensive literature review generation.\n\nThis endpoint streams real-time progress updates as it:\n1. Loads base papers from the saved processed dataset\n2. Searches arXiv for additional papers with diverse strategies (date, relevance, updates)\n3. Downloads and extracts text from PDFs with smart sectioning (first/last pages)\n4. Creates text chunks with priority weighting for key sections\n5. Selects most relevant chunks using weighted semantic similarity\n6. Generates LaTeX review using LLM\n7. Saves review and metadata\n\nRequest body:\n- saved_filepath: Path to the processed papers JSON file\n- paper_index: Index of the paper in the processed dataset\n- paper_info: Dictionary containing paper metadata (title, keywords, abstract, topic)\n\nThe final COMPLETED message includes:\n- LaTeX review content\n- Bibliography with all cited papers\n- Metadata about the review generation process\n- Statistics on papers and chunks processed",
+        "operationId": "create_review_endpoint_api_create_review_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{review_id}": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Get Review Endpoint",
+        "description": "Retrieve a specific review by ID.\n\nArgs:\n    review_id: Unique identifier for the review (timestamp)\n\nReturns:\n    Review data including LaTeX content and metadata",
+        "operationId": "get_review_endpoint_api_reviews__review_id__get",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "List Reviews Endpoint",
+        "description": "List all reviews, optionally filtered by source dataset.\n\nQuery Parameters:\n    saved_filepath: Optional filter by source dataset filepath\n\nReturns:\n    List of review metadata dictionaries",
+        "operationId": "list_reviews_endpoint_api_reviews_get",
+        "parameters": [
+          {
+            "name": "saved_filepath",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Saved Filepath"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/latex/compile": {
+      "post": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Compile Latex Endpoint",
+        "description": "Compile LaTeX text to PDF and return the PDF file.\n\nCompilation is sandboxed \u2014 see `utils.latex` for what that covers.\n\nRequest Body:\n    latex_text: Raw LaTeX content to compile\n\nReturns:\n    PDF file\n\nStatus codes:\n    400: the document could not be compiled\n    503: no TeX toolchain is installed on this server",
+        "operationId": "compile_latex_endpoint_api_latex_compile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LatexCompileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/graph/{project_id}/": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Get Graph Endpoint",
+        "description": "Endpoint to retrieve the reference graph for a given project ID.\nReturns nodes and edges as stored in the graph (including authors).",
+        "operationId": "get_graph_endpoint_api_graph__project_id___get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Health check endpoint",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Detailed health check endpoint",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DetailedHealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "examples": [
+              "healthy"
+            ]
+          },
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "endpoints": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Endpoints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "endpoints"
+        ],
+        "title": "DetailedHealthResponse",
+        "description": "Health check with the endpoint map."
+      },
+      "GraphData": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "title": "GraphData"
+      },
+      "GraphEdge": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GraphEdgeData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "GraphEdge"
+      },
+      "GraphEdgeData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "edge_type": {
+            "type": "string",
+            "enum": [
+              "citation",
+              "authorship"
+            ],
+            "title": "Edge Type",
+            "default": "citation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "target"
+        ],
+        "title": "GraphEdgeData"
+      },
+      "GraphNode": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GraphNodeData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "GraphNode"
+      },
+      "GraphNodeData": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Authors"
+          },
+          "published": {
+            "type": "string",
+            "title": "Published",
+            "default": ""
+          },
+          "is_processed": {
+            "type": "boolean",
+            "title": "Is Processed",
+            "default": false
+          },
+          "refs_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs To"
+          },
+          "refs_from": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs From"
+          },
+          "node_type": {
+            "type": "string",
+            "enum": [
+              "paper",
+              "author"
+            ],
+            "title": "Node Type",
+            "default": "paper"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GraphNodeData",
+        "description": "A paper or author node, in the shape the graph renderer consumes."
+      },
+      "GraphResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "examples": [
+              "success"
+            ]
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "graph_data": {
+            "$ref": "#/components/schemas/GraphData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "project_id",
+          "graph_data"
+        ],
+        "title": "GraphResponse",
+        "description": "A project's citation and authorship graph."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "examples": [
+              "ok"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "description": "Liveness check."
+      },
+      "JobResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "user_prompt": {
+            "type": "string",
+            "title": "User Prompt"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "user_prompt"
+        ],
+        "title": "JobResponse",
+        "description": "A research job's current state."
+      },
+      "LatexCompileRequest": {
+        "properties": {
+          "latex_text": {
+            "type": "string",
+            "title": "Latex Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latex_text"
+        ],
+        "title": "LatexCompileRequest",
+        "description": "Model for LaTeX compilation request"
+      },
+      "ResearchRequest": {
+        "properties": {
+          "user_prompt": {
+            "type": "string",
+            "title": "User Prompt"
+          },
+          "num_topics": {
+            "type": "integer",
+            "title": "Num Topics",
+            "default": 10
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topics"
+          },
+          "papers_per_topic": {
+            "type": "integer",
+            "title": "Papers Per Topic",
+            "default": 5
+          },
+          "use_reranking": {
+            "type": "boolean",
+            "title": "Use Reranking",
+            "default": true
+          },
+          "broad_search_multiplier": {
+            "type": "integer",
+            "title": "Broad Search Multiplier",
+            "default": 4
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_prompt"
+        ],
+        "title": "ResearchRequest",
+        "description": "Model for arXiv-based research request"
+      },
+      "ReviewListResponse": {
+        "properties": {
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewSummary"
+            },
+            "type": "array",
+            "title": "Reviews"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "ReviewListResponse"
+      },
+      "ReviewRequest": {
+        "properties": {
+          "saved_filepath": {
+            "type": "string",
+            "title": "Saved Filepath"
+          },
+          "paper_index": {
+            "type": "integer",
+            "title": "Paper Index"
+          },
+          "paper_info": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Paper Info"
+          }
+        },
+        "type": "object",
+        "required": [
+          "saved_filepath",
+          "paper_index",
+          "paper_info"
+        ],
+        "title": "ReviewRequest",
+        "description": "Model for review creation request"
+      },
+      "ReviewResponse": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "latex_content": {
+            "type": "string",
+            "title": "Latex Content"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id",
+          "latex_content"
+        ],
+        "title": "ReviewResponse",
+        "description": "A generated literature review."
+      },
+      "ReviewSummary": {
+        "properties": {
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic",
+            "default": ""
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "default": ""
+          },
+          "num_papers": {
+            "type": "integer",
+            "title": "Num Papers",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_id"
+        ],
+        "title": "ReviewSummary",
+        "description": "One entry in the review list."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
