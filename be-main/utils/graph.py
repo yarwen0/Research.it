@@ -297,22 +297,33 @@ class TrendsCreator:
         """
         method_counts = Counter()
         method_papers = defaultdict(list)
-        
+        # Canonical key -> how often each surface form was used for it, so a
+        # readable label can be chosen without splitting the count.
+        method_labels = defaultdict(Counter)
+
         for paper in self.papers:
             normalized = paper.get('normalized', {})
             methods = normalized.get('methods', [])
             
             for method in methods:
                 if isinstance(method, list) and len(method) >= 2:
-                    method_key = method[0]
-                    method_name = method[1]
+                    method_key = str(method[0])
+                    method_name = str(method[1])
                 else:
                     method_key = str(method)
                     method_name = str(method)
-                
+
+                if not method_key or not method_key.strip():
+                    continue
+
+                # Count against the canonical key, not the surface form.
+                # Counting by surface form split "Diffusion Models" from
+                # "diffusion model" into separate bars, which is exactly what
+                # the normalization step exists to prevent.
+                method_counts[method_key] += 1
+                method_papers[method_key].append(paper.get('title', 'Untitled'))
                 if method_name and method_name.strip():
-                    method_counts[method_name] += 1
-                    method_papers[method_name].append(paper.get('title', 'Untitled'))
+                    method_labels[method_key][method_name] += 1
         
         if not method_counts:
             return {
@@ -345,14 +356,16 @@ class TrendsCreator:
             
             for method in methods:
                 if isinstance(method, list) and len(method) >= 2:
-                    method_name = method[1]
+                    method_key = str(method[0])
                 else:
-                    method_name = str(method)
-                
-                if method_name and method_name.strip():
-                    # Find which category this method belongs to
+                    method_key = str(method)
+
+                if method_key and method_key.strip():
+                    # Categories were built from canonical keys above, so match
+                    # on the key here too — matching the surface form would
+                    # silently drop every method into no category at all.
                     for category, category_methods in method_categories.items():
-                        if method_name in category_methods:
+                        if method_key in category_methods:
                             topic_category_counts[topic][category] += 1
                             break
         
