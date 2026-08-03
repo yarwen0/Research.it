@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Ground-truth labels for the benchmark corpus.",
+    "",
+    "The detector sees only corpus.json. These attributes — what input a method",
+    "needs, what a dataset provides, and which body region each concerns — are",
+    "held out. A transfer gap is genuine only if the untried pairing is actually",
+    "runnable; the detector has no way to know that, so the gap between its",
+    "output and this file is exactly what the eval measures.",
+    "",
+    "Labelling protocol: see evals/README.md."
+  ],
+
+  "method_requires": {
+    "stacked_hourglass":   {"input": "image",           "region": "any"},
+    "transformer_lifting": {"input": "keypoints_2d",    "region": "any"},
+    "diffusion_prior":     {"input": "keypoints_2d",    "region": "any"},
+    "gnn_skeleton":        {"input": "keypoints_2d",    "region": "any"},
+    "smpl_regression":     {"input": "image",           "region": "body"},
+    "nerf_volumetric":     {"input": "multiview_image", "region": "body"},
+    "temporal_smoothing":  {"input": "video",           "region": "any"}
+  },
+
+  "dataset_provides": {
+    "human36m":  {"modalities": ["image", "keypoints_2d", "video", "multiview_image"], "region": "body"},
+    "mpii":      {"modalities": ["image", "keypoints_2d"],                             "region": "body"},
+    "threedpw":  {"modalities": ["image", "keypoints_2d", "video"],                    "region": "body"},
+    "agora":     {"modalities": ["image", "keypoints_2d"],                             "region": "body"},
+    "freihand":  {"modalities": ["image", "keypoints_2d"],                             "region": "hand"},
+    "interhand": {"modalities": ["image", "keypoints_2d", "video"],                    "region": "hand"}
+  },
+
+  "problem_region": {
+    "3d_pose_estimation":        "body",
+    "human_mesh_reconstruction": "body",
+    "hand_pose_estimation":      "hand"
+  },
+
+  "limitation_gaps": {
+    "_comment": "Hand-labelled. True when the limitation is pervasive across the methods tried on that problem, i.e. no existing approach escapes it.",
+    "true": [
+      {"problem": "3d_pose_estimation",        "limitation": "occlusion_sensitivity",
+       "why": "All seven papers report it, across four distinct method families."},
+      {"problem": "hand_pose_estimation",      "limitation": "self_occlusion",
+       "why": "All five papers report it; inherent to monocular hand capture."},
+      {"problem": "human_mesh_reconstruction", "limitation": "shape_pose_entanglement",
+       "why": "Reported by five of six papers, including every SMPL-based one."}
+    ],
+    "false": [
+      {"problem": "3d_pose_estimation",        "limitation": "slow_inference",
+       "why": "Confined to the diffusion papers; hourglass and GNN methods are fast, so it is a property of one method family rather than an open problem."},
+      {"problem": "human_mesh_reconstruction", "limitation": "requires_long_sequences",
+       "why": "Only the temporal variant reports it. Single-frame methods are unaffected."},
+      {"problem": "hand_pose_estimation",      "limitation": "interaction_ambiguity",
+       "why": "Only arises on two-hand datasets; single-hand work does not face it."}
+    ]
+  },
+
+  "future_work_gaps": {
+    "_comment": "Hand-labelled. True when the corpus repeatedly asks for a direction that nothing in the corpus delivers.",
+    "true": [
+      {"future_work": "unified_hand_body_model",
+       "why": "Requested by six papers spanning all three problems, and no corpus method covers hands and body jointly."},
+      {"future_work": "physics_based_constraints",
+       "why": "Requested by five papers; no method in the corpus imposes physical plausibility."}
+    ],
+    "false": [
+      {"future_work": "add_temporal_modeling",
+       "why": "Requested twice, but temporal_smoothing already delivers it in three papers. The detector matches labels to method names literally, so it cannot see that this is already realised under a different name."},
+      {"future_work": "faster_sampling",
+       "why": "Requested four times, but is an efficiency ask against known methods rather than an unexplored direction."}
+    ]
+  }
+}

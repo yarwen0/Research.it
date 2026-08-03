@@ -1,0 +1,166 @@
+[
+  {
+    "paper_id": "pose_01",
+    "problem": "3d_pose_estimation",
+    "methods": [["stacked_hourglass", "Stacked hourglass backbone"]],
+    "datasets": [["human36m", "Human3.6M"], ["mpii", "MPII Human Pose"]],
+    "limitations_implied": [["occlusion_sensitivity", "Degrades on occluded joints"]],
+    "limitations_explicit": [["high_gpu_requirements", "High GPU memory footprint"]],
+    "future_work": [["add_temporal_modeling", "Incorporate temporal context"]]
+  },
+  {
+    "paper_id": "pose_02",
+    "problem": "3d_pose_estimation",
+    "methods": [["transformer_lifting", "Transformer 2D-to-3D lifting"]],
+    "datasets": [["human36m", "Human3.6M"]],
+    "limitations_implied": [["occlusion_sensitivity", "Fails under heavy occlusion"]],
+    "limitations_explicit": [["depth_ambiguity", "Monocular depth ambiguity"]],
+    "future_work": [["add_temporal_modeling", "Extend to video sequences"], ["physics_based_constraints", "Add physical plausibility losses"]]
+  },
+  {
+    "paper_id": "pose_03",
+    "problem": "3d_pose_estimation",
+    "methods": [["transformer_lifting", "Spatio-temporal transformer"], ["temporal_smoothing", "Temporal smoothing module"]],
+    "datasets": [["human36m", "Human3.6M"], ["threedpw", "3DPW"]],
+    "limitations_implied": [["occlusion_sensitivity", "Occluded limbs jitter"]],
+    "limitations_explicit": [["requires_long_sequences", "Needs long input windows"]],
+    "future_work": [["physics_based_constraints", "Enforce biomechanical constraints"]]
+  },
+  {
+    "paper_id": "pose_04",
+    "problem": "3d_pose_estimation",
+    "methods": [["diffusion_prior", "Diffusion pose prior"]],
+    "datasets": [["human36m", "Human3.6M"]],
+    "limitations_implied": [["occlusion_sensitivity", "Ambiguous under occlusion"]],
+    "limitations_explicit": [["slow_inference", "Iterative sampling is slow"]],
+    "future_work": [["unified_hand_body_model", "Extend to hands and body jointly"]]
+  },
+  {
+    "paper_id": "pose_05",
+    "problem": "3d_pose_estimation",
+    "methods": [["diffusion_prior", "Score-based pose prior"]],
+    "datasets": [["mpii", "MPII Human Pose"]],
+    "limitations_implied": [["occlusion_sensitivity", "Occlusion hurts sample quality"]],
+    "limitations_explicit": [["slow_inference", "High sampling cost"]],
+    "future_work": [["faster_sampling", "Distill to fewer steps"]]
+  },
+  {
+    "paper_id": "pose_06",
+    "problem": "3d_pose_estimation",
+    "methods": [["gnn_skeleton", "Skeletal graph network"]],
+    "datasets": [["mpii", "MPII Human Pose"]],
+    "limitations_implied": [["occlusion_sensitivity", "Graph propagation degrades with missing joints"]],
+    "limitations_explicit": [["fixed_topology", "Assumes a fixed skeleton topology"]],
+    "future_work": [["unified_hand_body_model", "Unify body and hand skeletons"]]
+  },
+  {
+    "paper_id": "pose_07",
+    "problem": "3d_pose_estimation",
+    "methods": [["stacked_hourglass", "Hourglass heatmap regressor"]],
+    "datasets": [["threedpw", "3DPW"]],
+    "limitations_implied": [["occlusion_sensitivity", "In-the-wild occlusion is unhandled"]],
+    "limitations_explicit": [["domain_shift", "Poor transfer to in-the-wild imagery"]],
+    "future_work": [["physics_based_constraints", "Ground contact constraints"]]
+  },
+
+  {
+    "paper_id": "mesh_01",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["smpl_regression", "Direct SMPL parameter regression"]],
+    "datasets": [["threedpw", "3DPW"]],
+    "limitations_implied": [["shape_pose_entanglement", "Shape and pose are entangled"]],
+    "limitations_explicit": [["domain_shift", "Struggles outside training distribution"]],
+    "future_work": [["unified_hand_body_model", "Whole-body model including hands"]]
+  },
+  {
+    "paper_id": "mesh_02",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["smpl_regression", "SMPL regressor with iterative fitting"]],
+    "datasets": [["agora", "AGORA"]],
+    "limitations_implied": [["shape_pose_entanglement", "Body shape errors propagate to pose"]],
+    "limitations_explicit": [["synthetic_real_gap", "Synthetic-to-real gap"]],
+    "future_work": [["unified_hand_body_model", "Extend to expressive whole-body meshes"]]
+  },
+  {
+    "paper_id": "mesh_03",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["smpl_regression", "SMPL head"], ["transformer_lifting", "Transformer feature lifting"]],
+    "datasets": [["threedpw", "3DPW"], ["agora", "AGORA"]],
+    "limitations_implied": [["shape_pose_entanglement", "Coupled shape/pose estimates"]],
+    "limitations_explicit": [["high_gpu_requirements", "Large transformer memory cost"]],
+    "future_work": [["faster_sampling", "Reduce inference latency"]]
+  },
+  {
+    "paper_id": "mesh_04",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["nerf_volumetric", "Volumetric neural radiance field"]],
+    "datasets": [["human36m", "Human3.6M"]],
+    "limitations_implied": [["requires_calibrated_views", "Requires calibrated multi-view capture"]],
+    "limitations_explicit": [["slow_inference", "Per-scene optimization is slow"]],
+    "future_work": [["faster_sampling", "Amortize per-scene fitting"]]
+  },
+  {
+    "paper_id": "mesh_05",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["diffusion_prior", "Diffusion mesh prior"]],
+    "datasets": [["agora", "AGORA"]],
+    "limitations_implied": [["shape_pose_entanglement", "Prior conflates shape and pose"]],
+    "limitations_explicit": [["slow_inference", "Many denoising steps"]],
+    "future_work": [["physics_based_constraints", "Penetration-free constraints"]]
+  },
+  {
+    "paper_id": "mesh_06",
+    "problem": "human_mesh_reconstruction",
+    "methods": [["smpl_regression", "SMPL regression"], ["temporal_smoothing", "Temporal consistency loss"]],
+    "datasets": [["threedpw", "3DPW"]],
+    "limitations_implied": [["shape_pose_entanglement", "Identity drifts across frames"]],
+    "limitations_explicit": [["requires_long_sequences", "Needs multi-second clips"]],
+    "future_work": [["unified_hand_body_model", "Add hand articulation"]]
+  },
+
+  {
+    "paper_id": "hand_01",
+    "problem": "hand_pose_estimation",
+    "methods": [["stacked_hourglass", "Hourglass hand keypoint network"]],
+    "datasets": [["freihand", "FreiHAND"]],
+    "limitations_implied": [["self_occlusion", "Fingers self-occlude"]],
+    "limitations_explicit": [["scale_ambiguity", "Absolute hand scale is ambiguous"]],
+    "future_work": [["unified_hand_body_model", "Joint hand-body estimation"]]
+  },
+  {
+    "paper_id": "hand_02",
+    "problem": "hand_pose_estimation",
+    "methods": [["gnn_skeleton", "Hand skeleton graph network"]],
+    "datasets": [["freihand", "FreiHAND"]],
+    "limitations_implied": [["self_occlusion", "Occluded fingertips are unreliable"]],
+    "limitations_explicit": [["fixed_topology", "Fixed hand graph"]],
+    "future_work": [["physics_based_constraints", "Joint-limit constraints"]]
+  },
+  {
+    "paper_id": "hand_03",
+    "problem": "hand_pose_estimation",
+    "methods": [["gnn_skeleton", "Graph refinement"], ["temporal_smoothing", "Temporal filter"]],
+    "datasets": [["interhand", "InterHand2.6M"]],
+    "limitations_implied": [["self_occlusion", "Two-hand interaction causes occlusion"]],
+    "limitations_explicit": [["interaction_ambiguity", "Left/right assignment is ambiguous"]],
+    "future_work": [["unified_hand_body_model", "Situate hands on a full body"]]
+  },
+  {
+    "paper_id": "hand_04",
+    "problem": "hand_pose_estimation",
+    "methods": [["transformer_lifting", "Transformer hand lifting"]],
+    "datasets": [["interhand", "InterHand2.6M"]],
+    "limitations_implied": [["self_occlusion", "Heavy mutual occlusion"]],
+    "limitations_explicit": [["depth_ambiguity", "Monocular depth ambiguity"]],
+    "future_work": [["faster_sampling", "Lighter inference for AR devices"]]
+  },
+  {
+    "paper_id": "hand_05",
+    "problem": "hand_pose_estimation",
+    "methods": [["stacked_hourglass", "Hourglass heatmaps"]],
+    "datasets": [["interhand", "InterHand2.6M"]],
+    "limitations_implied": [["self_occlusion", "Interacting hands occlude each other"]],
+    "limitations_explicit": [["interaction_ambiguity", "Cross-hand correspondence errors"]],
+    "future_work": [["physics_based_constraints", "Non-penetration between hands"]]
+  }
+]
