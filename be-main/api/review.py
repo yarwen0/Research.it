@@ -19,6 +19,7 @@ import arxiv
 from api.arxiv import fetch_arxiv_search_results
 from core import OpenRouterClient
 from utils.embeddings import EmbeddingManager
+from utils.paths import resolve_data_path
 from constants.prompts.review_system_prompt import REVIEW_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -52,18 +53,24 @@ class ReviewManager:
     def _load_saved_papers(self, saved_filepath: str) -> Dict[str, Any]:
         """
         Load papers from saved processed file.
-        
+
         Args:
-            saved_filepath: Path to the processed papers JSON file
-        
+            saved_filepath: Path to the processed papers JSON file. This value
+                round-trips through the browser, so it is untrusted and is
+                confined to the data directory before being opened.
+
         Returns:
             Dictionary containing paper data
+
+        Raises:
+            UnsafePathError: if the path points outside the data directory.
         """
-        logger.info(f"Loading papers from {saved_filepath}")
-        
-        with open(saved_filepath, 'r', encoding='utf-8') as f:
+        resolved = resolve_data_path(saved_filepath)
+        logger.info("Loading papers from %s", resolved)
+
+        with open(resolved, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         logger.info(f"Loaded {data.get('total_papers', 0)} papers")
         return data
     
