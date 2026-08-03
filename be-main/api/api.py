@@ -27,6 +27,12 @@ from config import OPENROUTER_API_KEY, GEMINI_API_KEY
 from api.arxiv import ArxivClient, TopicGenerator, ArxivRateLimitError
 from api.review import ReviewManager
 from utils.graph import TrendsCreator
+from utils.latex import (
+    MAX_LATEX_BYTES,
+    LatexCompilationError,
+    LatexUnavailableError,
+    compile_latex_to_pdf,
+)
 from utils.paths import BASE_DIR, DATA_DIR, UnsafePathError, resolve_data_path
 from gap_finder import GapFinder, Paper
 
@@ -889,153 +895,71 @@ class LatexCompileRequest(BaseModel):
     """Model for LaTeX compilation request"""
     latex_text: str  # Raw LaTeX content to compile
 
+    @field_validator("latex_text")
+    @classmethod
+    def latex_text_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("latex_text must not be empty")
+        if len(v.encode("utf-8")) > MAX_LATEX_BYTES:
+            raise ValueError(
+                f"latex_text exceeds the {MAX_LATEX_BYTES} byte limit"
+            )
+        return v
+
 
 @router.post("/latex/compile")
 async def compile_latex_endpoint(request: LatexCompileRequest):
     """
     Compile LaTeX text to PDF and return the PDF file.
-    
+
+    Compilation is sandboxed — see `utils.latex` for what that covers.
+
     Request Body:
         latex_text: Raw LaTeX content to compile
-    
+
     Returns:
         PDF file
+
+    Status codes:
+        400: the document could not be compiled
+        503: no TeX toolchain is installed on this server
     """
-    import subprocess
-    
+    loop = asyncio.get_event_loop()
+
     try:
-        # Create a temporary directory for LaTeX compilation
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # Write the raw LaTeX content directly to a .tex file
-            tex_filename = "output.tex"
-            tex_path = temp_path / tex_filename
-            
-            with open(tex_path, 'w', encoding='utf-8') as f:
-                f.write(request.latex_text)
-            
-            pdf_filename = "output.pdf"
-            pdf_path = temp_path / pdf_filename
-            
-            # Add BasicTeX to PATH for compilation
-            env = os.environ.copy()
-            if os.path.exists('/Library/TeX/texbin'):
-                env['PATH'] = f"/Library/TeX/texbin:{env.get('PATH', '')}"
-            
-            # Full LaTeX compilation sequence for bibliography support
-            # 1. First pdflatex pass - generates .aux file with citations
-            try:
-                result = subprocess.run(
-                    ['pdflatex', '-interaction=nonstopmode', '-output-directory', str(temp_path), str(tex_path)],
-                    cwd=str(temp_path),
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                if result.returncode != 0:
-                    logger.warning(f"pdflatex first pass returned code {result.returncode}")
-                    logger.debug(f"pdflatex stdout: {result.stdout}")
-            except subprocess.TimeoutExpired:
-                raise HTTPException(status_code=500, detail="LaTeX compilation timed out (first pass)")
-            
-            # 2. Run bibtex to process bibliography (if .aux file exists)
-            aux_path = temp_path / "output.aux"
-            if aux_path.exists():
-                try:
-                    bibtex_result = subprocess.run(
-                        ['bibtex', 'output'],
-                        cwd=str(temp_path),
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
-                    # BibTeX warnings are common and acceptable
-                    if bibtex_result.returncode != 0:
-                        logger.warning(f"bibtex returned code {bibtex_result.returncode}")
-                        logger.debug(f"bibtex stdout: {bibtex_result.stdout}")
-                except subprocess.TimeoutExpired:
-                    logger.warning("BibTeX timed out, continuing without bibliography")
-                except FileNotFoundError:
-                    logger.warning("bibtex not found, skipping bibliography processing")
-            
-            # 3. Second pdflatex pass - includes bibliography from .bbl
-            try:
-                result = subprocess.run(
-                    ['pdflatex', '-interaction=nonstopmode', '-output-directory', str(temp_path), str(tex_path)],
-                    cwd=str(temp_path),
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                if result.returncode != 0:
-                    logger.warning(f"pdflatex second pass returned code {result.returncode}")
-                    logger.debug(f"pdflatex stdout: {result.stdout}")
-            except subprocess.TimeoutExpired:
-                raise HTTPException(status_code=500, detail="LaTeX compilation timed out (second pass)")
-            
-            # 4. Third pdflatex pass - resolves all cross-references
-            try:
-                result = subprocess.run(
-                    ['pdflatex', '-interaction=nonstopmode', '-output-directory', str(temp_path), str(tex_path)],
-                    cwd=str(temp_path),
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                if result.returncode != 0:
-                    logger.warning(f"pdflatex final pass returned code {result.returncode}")
-                    logger.debug(f"pdflatex stdout: {result.stdout}")
-                    logger.debug(f"pdflatex stderr: {result.stderr}")
-            except subprocess.TimeoutExpired:
-                raise HTTPException(status_code=500, detail="LaTeX compilation timed out (final pass)")
-            
-            # Check if PDF was generated (even with warnings/errors)
-            if not pdf_path.exists():
-                error_msg = "PDF generation failed"
-                if result.returncode != 0:
-                    # Try to extract meaningful error from log
-                    log_path = temp_path / "output.log"
-                    if log_path.exists():
-                        with open(log_path, 'r', encoding='utf-8', errors='ignore') as log_file:
-                            log_content = log_file.read()
-                            # Find critical errors
-                            if "! Emergency stop" in log_content:
-                                error_msg += ": Emergency stop in LaTeX compilation"
-                            elif "Fatal error" in log_content:
-                                error_msg += ": Fatal error in LaTeX compilation"
-                raise HTTPException(status_code=500, detail=error_msg)
-            
-            # Read the PDF file
-            pdf_content = pdf_path.read_bytes()
-            
-            # Save to a temporary file that will persist for the response
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                tmp_file.write(pdf_content)
-                tmp_file_path = tmp_file.name
-            
-            def cleanup():
-                try:
-                    os.unlink(tmp_file_path)
-                except OSError:
-                    pass
-            
-            return FileResponse(
-                tmp_file_path,
-                media_type="application/pdf",
-                filename="compiled.pdf",
-                background=BackgroundTask(cleanup)
-            )
-        
-    except HTTPException:
-        raise
+        # pdflatex is a blocking subprocess run three times over; keep it off
+        # the event loop so it cannot stall concurrent SSE streams.
+        pdf_content = await loop.run_in_executor(
+            None, compile_latex_to_pdf, request.latex_text
+        )
+    except LatexUnavailableError as e:
+        logger.error("LaTeX toolchain unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except LatexCompilationError as e:
+        logger.warning("LaTeX compilation failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error compiling LaTeX: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to compile LaTeX: {str(e)}")
+
+    # FileResponse streams from disk, so the file has to outlive this function
+    # and is removed by the background task once the response is sent.
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+        tmp_file.write(pdf_content)
+        tmp_file_path = tmp_file.name
+
+    def cleanup():
+        try:
+            os.unlink(tmp_file_path)
+        except OSError:
+            pass
+
+    return FileResponse(
+        tmp_file_path,
+        media_type="application/pdf",
+        filename="compiled.pdf",
+        background=BackgroundTask(cleanup)
+    )
 
 
 @router.get("/graph/{project_id}/")
