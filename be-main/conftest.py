@@ -18,7 +18,7 @@ os.environ.pop("CORS_ORIGINS", None)
 _TEST_DB_DIR = tempfile.mkdtemp(prefix="researchit-tests-")
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(_TEST_DB_DIR) / 'test.db'}"
 
-import pytest  # noqa: E402
+import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -16,15 +16,15 @@ GAP_TYPES = {"method_transfer", "dataset_transfer", "limitation_gap", "future_wo
 
 
 def make_paper(**overrides) -> Paper:
-    base = dict(
-        paper_id="p",
-        problem="",
-        methods=[],
-        datasets=[],
-        limitations_implied=[],
-        limitations_explicit=[],
-        future_work=[],
-    )
+    base = {
+        "paper_id": "p",
+        "problem": "",
+        "methods": [],
+        "datasets": [],
+        "limitations_implied": [],
+        "limitations_explicit": [],
+        "future_work": [],
+    }
     base.update(overrides)
     return Paper(**base)
 

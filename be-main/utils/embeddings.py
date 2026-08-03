@@ -2,7 +2,8 @@
 Embedding and semantic similarity utilities for review generation.
 """
 import logging
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class EmbeddingManager:
         """
         self.openrouter_client = openrouter_client
     
-    def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """
         Calculate cosine similarity between two vectors.
         
@@ -45,9 +46,9 @@ class EmbeddingManager:
     
     def get_embeddings(
         self, 
-        texts: List[str], 
+        texts: list[str], 
         model: str = "sentence-transformers/all-minilm-l12-v2"
-    ) -> List[List[float]]:
+    ) -> list[list[float]]:
         """
         Get embeddings for a list of texts.
         
@@ -66,7 +67,7 @@ class EmbeddingManager:
         chunk_size: int = 1000, 
         overlap: int = 200,
         max_chunk_size: int = 8000
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Split text into overlapping chunks for embedding.
         
@@ -122,9 +123,9 @@ class EmbeddingManager:
     def rank_chunks_by_relevance(
         self,
         query: str,
-        chunks: List[Dict[str, Any]],
-        top_k: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        chunks: list[dict[str, Any]],
+        top_k: int | None = None
+    ) -> list[dict[str, Any]]:
         """
         Rank text chunks by semantic similarity to a query.
         
@@ -175,9 +176,9 @@ class EmbeddingManager:
     
     def deduplicate_chunks(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: list[dict[str, Any]],
         similarity_threshold: float = 0.95
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Remove highly similar chunks to reduce redundancy.
         

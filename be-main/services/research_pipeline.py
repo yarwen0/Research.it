@@ -13,8 +13,9 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator, Optional
+from typing import Any
 
 from api.arxiv import ArxivClient, ArxivRateLimitError, TopicGenerator
 from core import PDFExtractor, ReferenceParameterExtractorFallback, create_llm_client
@@ -39,7 +40,7 @@ class ResearchPipeline:
         self,
         *,
         user_prompt: str,
-        topics: Optional[list[str]] = None,
+        topics: list[str] | None = None,
         num_topics: int = 10,
         papers_per_topic: int = 5,
         use_reranking: bool = True,

@@ -21,7 +21,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from sqlalchemy import select
 
@@ -74,7 +75,7 @@ def _append_event(job_id: str, sequence: int, event: PipelineEvent) -> None:
         )
 
 
-def _mark(job_id: str, status: JobStatus, *, error: Optional[str] = None) -> None:
+def _mark(job_id: str, status: JobStatus, *, error: str | None = None) -> None:
     with session_scope() as session:
         job = session.get(Job, job_id)
         if job is None:

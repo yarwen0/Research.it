@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class DatasetValidator:
         """
         self.llm_client = llm_client
     
-    def validate_datasets(self, dataset_names: List[str]) -> Dict[str, bool]:
+    def validate_datasets(self, dataset_names: list[str]) -> dict[str, bool]:
         """
         Validate a batch of dataset names using LLM.
         
@@ -83,9 +82,9 @@ Return format:
         except Exception as e:
             logger.error(f"Failed to validate datasets with LLM: {e}")
             # In case of error, assume all are valid to not lose data
-            return {name: True for name in dataset_names}
+            return dict.fromkeys(dataset_names, True)
     
-    def batch_validate_datasets(self, dataset_names: List[str], batch_size: int = 20) -> Dict[str, bool]:
+    def batch_validate_datasets(self, dataset_names: list[str], batch_size: int = 20) -> dict[str, bool]:
         """
         Validate datasets in batches to avoid token limits.
         

@@ -31,7 +31,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     text_file = sys.argv[1]
-    with open(f"./examples/docs/{text_file}.txt", "r", encoding="utf-8") as f:
+    with open(f"./examples/docs/{text_file}.txt", encoding="utf-8") as f:
         text = f.read()
 
     extractor = PDFExtractor(llm_client=create_llm_client())

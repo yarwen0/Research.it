@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 
 import config
-from config import _maybe, _truthy, _int
+from config import _int, _maybe, _truthy
 
 
 class TestTruthy:

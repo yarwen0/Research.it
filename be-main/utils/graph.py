@@ -6,19 +6,18 @@ trend data suitable for visualization with MUI X Charts in React frontend.
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Literal
-from collections import Counter, defaultdict
-from datetime import datetime
 import logging
 import re
+from collections import Counter, defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-from utils.charts import ChartType, LayoutType, create_chart_response
+from utils.charts import create_chart_response
 from utils.datasets import DatasetValidator
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ class TrendsCreator:
     - Assumption and limitation patterns
     """
     
-    def __init__(self, processed_papers_data: Dict[str, Any], ontology_data: Optional[Dict[str, Any]] = None, llm_client=None):
+    def __init__(self, processed_papers_data: dict[str, Any], ontology_data: dict[str, Any] | None = None, llm_client=None):
         """
         Initialize trends creator with processed papers data.
         
@@ -53,7 +52,7 @@ class TrendsCreator:
         self.dataset_validator = DatasetValidator(llm_client) if llm_client else None
         
     @classmethod
-    def from_file(cls, filepath: str, ontology_filepath: Optional[str] = None, llm_client=None):
+    def from_file(cls, filepath: str, ontology_filepath: str | None = None, llm_client=None):
         """
         Create TrendsCreator from a processed papers JSON file.
         
@@ -65,18 +64,18 @@ class TrendsCreator:
         Returns:
             TrendsCreator instance
         """
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             data = json.load(f)
         
         ontology = None
         if ontology_filepath:
-            with open(ontology_filepath, 'r', encoding='utf-8') as f:
+            with open(ontology_filepath, encoding='utf-8') as f:
                 ontology = json.load(f)
         
         return cls(data, ontology, llm_client)
     
     @classmethod
-    def from_latest_file(cls, data_dir: str = "data", ontology_filepath: Optional[str] = None, llm_client=None):
+    def from_latest_file(cls, data_dir: str = "data", ontology_filepath: str | None = None, llm_client=None):
         """
         Create TrendsCreator from the most recent processed papers file.
         
@@ -100,7 +99,7 @@ class TrendsCreator:
         
         return cls.from_file(str(latest_file), ontology_filepath, llm_client)
     
-    def create_all_trends(self) -> Dict[str, Any]:
+    def create_all_trends(self) -> dict[str, Any]:
         """
         Generate all available trend analyses.
         
@@ -153,18 +152,18 @@ class TrendsCreator:
         
         return trends
     
-    def _get_metadata(self) -> Dict[str, Any]:
+    def _get_metadata(self) -> dict[str, Any]:
         """Get metadata about the dataset."""
         return {
             "user_prompt": self.user_prompt,
             "total_papers": len(self.papers),
             "timestamp": self.data.get('timestamp'),
-            "unique_topics": len(set(p.get('topic', '') for p in self.papers)),
+            "unique_topics": len({p.get('topic', '') for p in self.papers}),
             "unique_authors": len(self._get_all_authors()),
             "date_range": self._get_date_range()
         }
     
-    def get_publication_timeline(self) -> Dict[str, Any]:
+    def get_publication_timeline(self) -> dict[str, Any]:
         """
         Create time series data of publications over time.
         
@@ -217,7 +216,7 @@ class TrendsCreator:
             y_axis_label="Number of Publications"
         )
     
-    def _categorize_methods_with_nlp(self, methods_list: List[str], n_categories: int = 6) -> Dict[str, List[str]]:
+    def _categorize_methods_with_nlp(self, methods_list: list[str], n_categories: int = 6) -> dict[str, list[str]]:
         """
         Use NLP to categorize methods into topic clusters.
         
@@ -248,7 +247,7 @@ class TrendsCreator:
             
             # Group methods by cluster
             clustered_methods = defaultdict(list)
-            for method, cluster_id in zip(methods_list, clusters):
+            for method, cluster_id in zip(methods_list, clusters, strict=False):
                 clustered_methods[cluster_id].append(method)
             
             # Name each cluster based on common terms
@@ -285,7 +284,7 @@ class TrendsCreator:
                 categorized[first_word].append(method)
             return dict(categorized)
     
-    def get_method_frequency(self, top_n: int = 15) -> Dict[str, Any]:
+    def get_method_frequency(self, top_n: int = 15) -> dict[str, Any]:
         """
         Analyze frequency of methods used across papers with NLP categorization.
         Returns radar chart format showing method categories by research topic.
@@ -413,7 +412,7 @@ class TrendsCreator:
             }
         }
     
-    def get_research_evolution(self) -> Dict[str, Any]:
+    def get_research_evolution(self) -> dict[str, Any]:
         """
         Analyze how research has evolved over time (methods adoption trends).
         
@@ -481,7 +480,7 @@ class TrendsCreator:
             y_axis_label="Count"
         )
     
-    def get_future_work_themes(self, top_n: int = 10) -> Dict[str, Any]:
+    def get_future_work_themes(self, top_n: int = 10) -> dict[str, Any]:
         """
         Analyze common themes in future work suggestions across topics using radar chart.
         
@@ -573,7 +572,7 @@ class TrendsCreator:
             }
         }
     
-    def _extract_meaningful_words(self, texts: List[str], top_n: int = 50, min_word_length: int = 3) -> List[tuple]:
+    def _extract_meaningful_words(self, texts: list[str], top_n: int = 50, min_word_length: int = 3) -> list[tuple]:
         """
         Extract the most meaningful words from a collection of texts using TF-IDF.
         
@@ -635,7 +634,7 @@ class TrendsCreator:
             mean_tfidf = np.asarray(tfidf_matrix.mean(axis=0)).ravel()  # type: ignore
             
             # Create word-score pairs
-            word_scores = list(zip(feature_names, mean_tfidf))
+            word_scores = list(zip(feature_names, mean_tfidf, strict=False))
             
             # Sort by score descending
             word_scores.sort(key=lambda x: x[1], reverse=True)
@@ -659,7 +658,7 @@ class TrendsCreator:
             )
             return word_counts.most_common(top_n)
     
-    def get_assumptions_wordcloud(self, top_n: int = 50) -> Dict[str, Any]:
+    def get_assumptions_wordcloud(self, top_n: int = 50) -> dict[str, Any]:
         """
         Generate wordcloud-friendly data for assumptions using NLP to extract meaningful words.
         Combines all assumption texts and uses TF-IDF to find the most significant terms.
@@ -763,7 +762,7 @@ class TrendsCreator:
             }
         }
     
-    def get_limitations_wordcloud(self, top_n: int = 50) -> Dict[str, Any]:
+    def get_limitations_wordcloud(self, top_n: int = 50) -> dict[str, Any]:
         """
         Generate wordcloud-friendly data for limitations using NLP to extract meaningful words.
         Combines all limitation texts and uses TF-IDF to find the most significant terms.
@@ -868,7 +867,7 @@ class TrendsCreator:
             }
         }
     
-    def get_research_flow_sankey(self) -> Dict[str, Any]:
+    def get_research_flow_sankey(self) -> dict[str, Any]:
         """
         Create a Sankey diagram showing research methodology flow:
         Topics → Methods → Future Work Directions
@@ -1017,7 +1016,7 @@ class TrendsCreator:
                 authors.add(author)
         return authors
     
-    def _get_date_range(self) -> Dict[str, str]:
+    def _get_date_range(self) -> dict[str, str]:
         """Get earliest and latest publication dates."""
         dates = []
         for paper in self.papers:
@@ -1035,7 +1034,7 @@ class TrendsCreator:
             }
         return {"earliest": "", "latest": ""}
     
-    def get_topics_summary(self) -> Dict[str, Any]:
+    def get_topics_summary(self) -> dict[str, Any]:
         """
         Create a structured summary of topics with associated paper IDs.
         
@@ -1067,7 +1066,7 @@ class TrendsCreator:
             "topics": topics_list
         }
     
-    def get_dataset_summary(self) -> Dict[str, Any]:
+    def get_dataset_summary(self) -> dict[str, Any]:
         """
         Create a comprehensive dataset summary with detailed information.
         
@@ -1155,10 +1154,10 @@ class TrendsCreator:
         
         # Convert sets to lists for JSON serialization and sort by paper count
         dataset_summary = []
-        for dataset_key, info in validated_datasets.items():
+        for info in validated_datasets.values():
             dataset_summary.append({
                 "normalized_id": info["normalized_id"],
-                "original_names": sorted(list(info["original_names"])),
+                "original_names": sorted(info["original_names"]),
                 "paper_count": info["paper_count"],
                 "papers": info["papers"]
             })
@@ -1175,7 +1174,7 @@ class TrendsCreator:
             "pie_chart": pie_chart_data
         }
     
-    def _create_dataset_pie_chart(self, dataset_summary: List[Dict[str, Any]], top_n: int = 10) -> Dict[str, Any]:
+    def _create_dataset_pie_chart(self, dataset_summary: list[dict[str, Any]], top_n: int = 10) -> dict[str, Any]:
         """
         Create pie chart data for dataset distribution.
         
@@ -1203,7 +1202,7 @@ class TrendsCreator:
         
         # Create data points
         data_points = []
-        for idx, dataset in enumerate(top_datasets):
+        for _idx, dataset in enumerate(top_datasets):
             # Use the most common original name or normalized_id
             display_name = dataset["original_names"][0] if dataset["original_names"] else dataset["normalized_id"]
             
@@ -1250,7 +1249,7 @@ class TrendsCreator:
         )
 
 
-def create_trends_from_file(filepath: str, ontology_filepath: Optional[str] = None, llm_client=None) -> Dict[str, Any]:
+def create_trends_from_file(filepath: str, ontology_filepath: str | None = None, llm_client=None) -> dict[str, Any]:
     """
     Convenience function to create all trends from a file.
     
@@ -1266,7 +1265,7 @@ def create_trends_from_file(filepath: str, ontology_filepath: Optional[str] = No
     return creator.create_all_trends()
 
 
-def create_trends_from_latest(data_dir: str = "data", ontology_filepath: Optional[str] = None, llm_client=None) -> Dict[str, Any]:
+def create_trends_from_latest(data_dir: str = "data", ontology_filepath: str | None = None, llm_client=None) -> dict[str, Any]:
     """
     Convenience function to create all trends from the latest file.
     

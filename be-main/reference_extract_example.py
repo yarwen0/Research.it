@@ -1,5 +1,5 @@
-import core
 import config
+import core
 
 ex = core.ReferenceParameterExtractorFallback(config.GEMINI_API_KEY)
 

@@ -7,8 +7,6 @@ that away.
 
 from __future__ import annotations
 
-import pytest
-
 from utils.graph import TrendsCreator
 
 

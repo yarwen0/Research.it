@@ -8,6 +8,7 @@ what ends up in the database.
 from __future__ import annotations
 
 import json
+from typing import ClassVar
 
 import pytest
 from sqlalchemy import func, select
@@ -38,7 +39,7 @@ class StubExtractor:
     paper is identical has no untried combinations in it.
     """
 
-    NORMALIZED = [
+    NORMALIZED: ClassVar[list[dict]] = [
         {
             "problem": "pose_estimation",
             "methods": [["diffusion", "Diffusion Models"]],

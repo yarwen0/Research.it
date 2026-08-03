@@ -7,6 +7,8 @@ per-endpoint limits) can import it without a cycle.
 
 from __future__ import annotations
 
+import contextlib
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
@@ -65,10 +67,8 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
     # the middleware's default limits do not set it, so this stays best-effort.
     view_limit = getattr(request.state, "view_rate_limit", None)
     if view_limit:
-        try:
+        with contextlib.suppress(AttributeError, IndexError, TypeError):
             headers["Retry-After"] = str(view_limit[0].get_expiry())
-        except (AttributeError, IndexError, TypeError):
-            pass
 
     return JSONResponse(
         status_code=429,

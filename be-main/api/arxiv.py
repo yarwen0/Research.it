@@ -8,12 +8,14 @@ This module provides functionality to:
 4. Extract text from PDF files using PyMuPDF
 """
 
-import os
-import time
-import random
-import logging
 import json
-from typing import List, Dict, Optional, Any, Callable
+import logging
+import os
+import random
+import time
+from collections.abc import Callable
+from typing import Any
+
 import arxiv  # type: ignore
 import fitz  # type: ignore  # PyMuPDF
 import numpy as np
@@ -52,16 +54,14 @@ def _arxiv_transient_error(exc: BaseException) -> bool:
         return True
     if "http 500" in msg or "500 (" in msg:
         return True
-    if "timed out" in msg or "timeout" in msg:
-        return True
-    return False
+    return bool("timed out" in msg or "timeout" in msg)
 
 
 def fetch_arxiv_search_results(
     search: arxiv.Search,
     *,
-    client: Optional[Any] = None,
-) -> List[Any]:
+    client: Any | None = None,
+) -> list[Any]:
     """
     Run an arxiv.Search with the same retry/backoff policy as ArxivClient.search_papers.
 
@@ -69,7 +69,7 @@ def fetch_arxiv_search_results(
     from export.arxiv.org do not abort the whole pipeline.
     """
     c = client or arxiv.Client(page_size=20, delay_seconds=4.0, num_retries=3)
-    last_err: Optional[BaseException] = None
+    last_err: BaseException | None = None
     for attempt in range(ARXIV_SEARCH_MAX_ATTEMPTS):
         try:
             return list(c.results(search))
@@ -121,7 +121,7 @@ class ArxivClient:
         """Get a random user agent from the pool."""
         return random.choice(USER_AGENTS)
     
-    def _extract_references(self, text: str) -> List[Dict[str, Any]]:
+    def _extract_references(self, text: str) -> list[dict[str, Any]]:
         """
         Extract references from paper text using LLM fallback.
         
@@ -138,10 +138,10 @@ class ArxivClient:
             logger.info(f"LLM extracted {len(processed_refs)} references from text")
             return processed_refs
         except Exception as e:
-            logger.error(f"Failed to extract references using LLM: {str(e)}")
+            logger.error(f"Failed to extract references using LLM: {e!s}")
             return []
 
-    def search_papers(self, query: str, max_results: Optional[int] = None) -> List[Any]:
+    def search_papers(self, query: str, max_results: int | None = None) -> list[Any]:
         """
         Search for papers on arXiv.
         
@@ -164,7 +164,7 @@ class ArxivClient:
 
         return fetch_arxiv_search_results(search, client=self.client)
     
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """
         Calculate cosine similarity between two vectors.
         
@@ -193,7 +193,7 @@ class ArxivClient:
         desired_count: int,
         broad_search_multiplier: int = 4,
         embedding_model: str = "sentence-transformers/all-minilm-l12-v2"
-    ) -> List[Any]:
+    ) -> list[Any]:
         """
         Search arXiv broadly and rerank papers based on semantic similarity to user query.
         
@@ -243,7 +243,7 @@ class ArxivClient:
         # Step 3: Get embeddings for all papers and the query
         try:
             # Batch all texts including the query
-            all_texts = [user_query] + paper_texts
+            all_texts = [user_query, *paper_texts]
             embeddings = self.openrouter_client.get_embeddings(all_texts, model=embedding_model)
             
             query_embedding = embeddings[0]
@@ -266,7 +266,7 @@ class ArxivClient:
         
         # Log top similarities for debugging
         logger.info("Top 5 reranked papers by similarity:")
-        for i, (idx, sim, paper) in enumerate(similarities[:5]):
+        for i, (_idx, sim, paper) in enumerate(similarities[:5]):
             logger.info(f"  {i+1}. [{sim:.4f}] {paper.title[:80]}")
         
         # Step 6: Return top-k papers
@@ -275,7 +275,7 @@ class ArxivClient:
         logger.info(f"Reranked and returning top {len(reranked_papers)} papers")
         return reranked_papers
     
-    def download_pdf(self, paper: Any, download_dir: Optional[str] = None) -> str:
+    def download_pdf(self, paper: Any, download_dir: str | None = None) -> str:
         """
         Download a paper's PDF file.
         
@@ -310,12 +310,12 @@ class ArxivClient:
             paper.download_pdf(dirpath=download_dir, filename=filename)
             logger.info(f"Successfully downloaded PDF: {filename} to {download_dir}")
         except Exception as e:
-            logger.error(f"Failed to download PDF {filename}: {str(e)}")
+            logger.error(f"Failed to download PDF {filename}: {e!s}")
             raise
         
         return filepath
     
-    def extract_text_from_pdf(self, pdf_path: str, max_pages: Optional[int] = None) -> str:
+    def extract_text_from_pdf(self, pdf_path: str, max_pages: int | None = None) -> str:
         """
         Extract text from a PDF file using PyMuPDF.
         
@@ -348,10 +348,10 @@ class ArxivClient:
             
             return "\n\n".join(text_parts)
         except Exception as e:
-            logger.error(f"Failed to extract text from PDF {pdf_path}: {str(e)}")
+            logger.error(f"Failed to extract text from PDF {pdf_path}: {e!s}")
             raise
     
-    def extract_text_with_sections(self, pdf_path: str, first_pages: int = 2, last_pages: int = 2) -> Dict[str, str]:
+    def extract_text_with_sections(self, pdf_path: str, first_pages: int = 2, last_pages: int = 2) -> dict[str, str]:
         """
         Extract text from PDF with separate sections for first pages, last pages (excluding references), and full text.
         
@@ -429,16 +429,16 @@ class ArxivClient:
             }
             
         except Exception as e:
-            logger.error(f"Failed to extract sectioned text from PDF {pdf_path}: {str(e)}")
+            logger.error(f"Failed to extract sectioned text from PDF {pdf_path}: {e!s}")
             raise
     
     def fetch_and_extract_paper(
         self, 
         paper: Any, 
-        download_dir: Optional[str] = None,
-        max_pages: Optional[int] = None,
+        download_dir: str | None = None,
+        max_pages: int | None = None,
         cleanup: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Download a paper and extract its text.
         
@@ -485,15 +485,15 @@ class ArxivClient:
     def search_and_extract_papers(
         self, 
         query: str, 
-        max_results: Optional[int] = None,
-        download_dir: Optional[str] = None,
-        max_pages: Optional[int] = None,
+        max_results: int | None = None,
+        download_dir: str | None = None,
+        max_pages: int | None = None,
         cleanup: bool = False,
         delay_between_downloads: float = 3.0,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
         use_reranking: bool = True,
         broad_search_multiplier: int = 4
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for papers and extract text from all results.
         
@@ -546,7 +546,7 @@ class ArxivClient:
                 if progress_callback:
                     progress_callback(len(extracted_papers), len(papers))
             except Exception as e:
-                logger.error(f"Error processing paper {paper.get_short_id()}: {str(e)}")
+                logger.error(f"Error processing paper {paper.get_short_id()}: {e!s}")
                 continue
         
         logger.info(f"Completed processing: {len(extracted_papers)}/{len(papers)} papers successfully extracted")
@@ -559,7 +559,7 @@ class TopicGenerator:
     def __init__(self, llm_client: OpenRouterClient):
         self.client = llm_client
 
-    def generate_related_topics(self, user_prompt: str, num_topics: int = 10) -> List[str]:
+    def generate_related_topics(self, user_prompt: str, num_topics: int = 10) -> list[str]:
         """Return a list of related research topics for the supplied prompt."""
 
         system_prompt = """You are a research topic generator for arXiv paper searches. Your task is to generate search queries that will find relevant papers on arXiv.
@@ -645,7 +645,7 @@ Return only the JSON object with the topics array."""
             topics.append(user_prompt.strip()[:200])
         return topics[:num_topics]
 
-    def generate_paper_suggestions(self, gaps: List[Dict], user_prompt: str, num_papers: int = 10) -> List[Dict]:
+    def generate_paper_suggestions(self, gaps: list[dict], user_prompt: str, num_papers: int = 10) -> list[dict]:
         """Generate paper suggestions from research gaps."""
         
         system_prompt = """You are a research paper idea generator. Given research gaps identified from analyzing existing papers, generate concrete, innovative paper proposals.

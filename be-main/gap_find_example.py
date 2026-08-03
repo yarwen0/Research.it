@@ -5,12 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import List
 
-from gap_finder import GapFinder, Gap, load_papers_from_path
+from gap_finder import Gap, GapFinder, load_papers_from_path
 
 
-def summarize_gaps(gaps: List[Gap]) -> None:
+def summarize_gaps(gaps: list[Gap]) -> None:
     for gap in gaps:
         headline = [f"[{gap.gap_type}]", f"problem={gap.problem}"]
         if gap.method:

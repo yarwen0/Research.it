@@ -8,9 +8,9 @@ drive the URL itself.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Optional
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -19,8 +19,8 @@ from config import DATABASE_URL, DB_ECHO, DB_MAX_OVERFLOW, DB_POOL_SIZE
 
 logger = logging.getLogger(__name__)
 
-_engine: Optional[Engine] = None
-_session_factory: Optional[sessionmaker[Session]] = None
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
 
 
 def _is_sqlite(url: str) -> bool:

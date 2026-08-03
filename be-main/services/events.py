@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class StatusType(str, Enum):
@@ -29,14 +29,14 @@ class PipelineEvent:
 
     status: StatusType
     message: str
-    result: Optional[dict[str, Any]] = field(default=None)
+    result: dict[str, Any] | None = field(default=None)
 
 
 def processing(message: str) -> PipelineEvent:
     return PipelineEvent(StatusType.PROCESSING, message)
 
 
-def progress(message: str, result: Optional[dict[str, Any]] = None) -> PipelineEvent:
+def progress(message: str, result: dict[str, Any] | None = None) -> PipelineEvent:
     return PipelineEvent(StatusType.PROGRESS, message, result)
 
 

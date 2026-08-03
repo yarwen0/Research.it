@@ -14,9 +14,10 @@ structurally impossible.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from gap_finder import Gap, GapFinder, Paper
 
@@ -133,10 +134,7 @@ class GroundTruth:
             return False
 
         expected_region = self.problem_region.get(problem)
-        if expected_region is not None and provides["region"] != expected_region:
-            return False
-
-        return True
+        return not (expected_region is not None and provides["region"] != expected_region)
 
     # -- expected gaps -----------------------------------------------------
 

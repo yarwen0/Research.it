@@ -11,14 +11,15 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Make the backend package importable when alembic runs from be-main/.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import DATABASE_URL  # noqa: E402
-from db.models import Base  # noqa: E402
+from config import DATABASE_URL
+from db.models import Base
 
 config = context.config
 

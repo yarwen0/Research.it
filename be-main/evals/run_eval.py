@@ -17,7 +17,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from evals.harness import (  # noqa: E402
+from evals.harness import (
     GroundTruth,
     evaluate,
     load_corpus,
@@ -83,7 +83,7 @@ def sweep(papers, truth, *, top_k_per_type: int) -> list[dict[str, Any]]:
     results = []
 
     for values in product(*(SWEEP_GRID[k] for k in keys)):
-        config = dict(zip(keys, values))
+        config = dict(zip(keys, values, strict=False))
         result = evaluate(papers, truth, top_k_per_type=top_k_per_type, **config)
         results.append(result)
 

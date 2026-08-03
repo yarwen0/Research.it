@@ -1,31 +1,29 @@
 import json
+import logging
+import os
 import re
 import time
-from typing import Dict, List, Optional
-import os
-import logging
-
 import urllib
-import urllib.request
 import urllib.error
-
+import urllib.request
+from typing import ClassVar
 from urllib.error import HTTPError
+
 from pydantic import BaseModel, Field
 
-from constants.response_formats.extractor_default import EXTRACTOR_DEFAULT_RESPONSE_FORMAT
-from constants.response_formats.canonical_default import CANONICAL_DEFAULT_RESPONSE_FORMAT
-from constants.prompts.extractor_system_prompt import EXTRACTOR_SYSTEM_PROMPT
-from constants.prompts.normalizer_system_prompt import NORMALIZER_SYSTEM_PROMPT
-
 from config import (
-    OPENROUTER_API_KEY,
     GEMINI_API_KEY,
     LLM_PROVIDER,
-    OPENROUTER_FOR_EMBEDDINGS,
     OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
     OLLAMA_EMBED_MODEL,
+    OLLAMA_MODEL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_FOR_EMBEDDINGS,
 )
+from constants.prompts.extractor_system_prompt import EXTRACTOR_SYSTEM_PROMPT
+from constants.prompts.normalizer_system_prompt import NORMALIZER_SYSTEM_PROMPT
+from constants.response_formats.canonical_default import CANONICAL_DEFAULT_RESPONSE_FORMAT
+from constants.response_formats.extractor_default import EXTRACTOR_DEFAULT_RESPONSE_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +71,7 @@ class GeminiClient:
     """
 
     # Order matters: cheapest/highest-quota first.
-    DEFAULT_FALLBACK_CHAIN = [
+    DEFAULT_FALLBACK_CHAIN: ClassVar[list[str]] = [
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash-lite",
         "gemini-2.0-flash",
@@ -86,7 +84,7 @@ class GeminiClient:
         api_key: str,
         model: str = "gemini-2.5-flash-lite",
         timeout: int = 120,
-        fallback_models: Optional[List[str]] = None,
+        fallback_models: list[str] | None = None,
     ) -> None:
         self.api_key = api_key
         self.model = model
@@ -127,16 +125,16 @@ class GeminiClient:
                 raise RuntimeError(f"Gemini HTTP {exc.code}: {message}") from exc
 
     @staticmethod
-    def _extract_retry_delay(detail: str) -> Optional[int]:
+    def _extract_retry_delay(detail: str) -> int | None:
         """Pull the suggested retryDelay (seconds) out of a Gemini error body."""
         m = re.search(r'"retryDelay"\s*:\s*"(\d+)s"', detail)
         if m:
             return int(m.group(1))
         return None
 
-    def chat_completion(self, messages: List[Dict[str, str]], *, response_format: Dict | None) -> str:
-        system_text_parts: List[str] = []
-        contents: List[Dict] = []
+    def chat_completion(self, messages: list[dict[str, str]], *, response_format: dict | None) -> str:
+        system_text_parts: list[str] = []
+        contents: list[dict] = []
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
@@ -147,11 +145,11 @@ class GeminiClient:
             else:
                 contents.append({"role": "user", "parts": [{"text": content}]})
 
-        body: Dict = {"contents": contents}
+        body: dict = {"contents": contents}
         if system_text_parts:
             body["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_text_parts)}]}
 
-        gen_config: Dict = {"temperature": 0.2}
+        gen_config: dict = {"temperature": 0.2}
         if response_format:
             schema = _to_gemini_response_schema(response_format)
             if schema:
@@ -161,7 +159,7 @@ class GeminiClient:
                 gen_config["responseMimeType"] = "application/json"
         body["generationConfig"] = gen_config
 
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
         for model in self.model_chain:
             url = f"{self.base_url}/models/{model}:generateContent?key={self.api_key}"
             try:
@@ -320,8 +318,8 @@ class OllamaClient:
                 "Start it with `ollama serve` and make sure the model is pulled."
             ) from exc
 
-    def chat_completion(self, messages: List[Dict[str, str]], *, response_format: Dict | None) -> str:
-        body: Dict = {
+    def chat_completion(self, messages: list[dict[str, str]], *, response_format: dict | None) -> str:
+        body: dict = {
             "model": self.model,
             "messages": messages,
             "stream": False,
@@ -415,7 +413,7 @@ class OpenRouterClient:
         self.endpoint = "https://openrouter.ai/api/v1/chat/completions"
         self.embedding_endpoint = "https://openrouter.ai/api/v1/embeddings"
 
-    def chat_completion(self, messages: List[Dict[str, str]], *, response_format: Dict | None) -> str:
+    def chat_completion(self, messages: list[dict[str, str]], *, response_format: dict | None) -> str:
         payload = json.dumps({"model": self.model, "messages": messages, "response_format": response_format}).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
@@ -510,12 +508,12 @@ class OpenRouterClient:
         
 class ExtractedReference(BaseModel):
     title: str = Field(description="The title of the paper")
-    authors: Optional[List[str]] = Field(None, description="List of authors of the paper")
-    year: Optional[str] = Field(None, description="The year of publication")
-    arxiv_id: Optional[str] = Field(None, description="The arXiv ID of the paper, if available")
+    authors: list[str] | None = Field(None, description="List of authors of the paper")
+    year: str | None = Field(None, description="The year of publication")
+    arxiv_id: str | None = Field(None, description="The arXiv ID of the paper, if available")
         
 class ExtractedReferenceResponse(BaseModel):
-    refs: List[ExtractedReference] = Field(description="List of extracted references")
+    refs: list[ExtractedReference] = Field(description="List of extracted references")
         
 class ReferenceParameterExtractorFallback:
     """
@@ -602,14 +600,14 @@ class ReferenceParameterExtractorFallback:
 
 class PDFExtractor:
     client: "OpenRouterClient | GeminiClient"
-    parameters_schema: Dict
+    parameters_schema: dict
 
-    def __init__(self, llm_client, parameters_schema: Dict | None = None) -> None:
+    def __init__(self, llm_client, parameters_schema: dict | None = None) -> None:
         self.client = llm_client
         # Use provided schema or fall back to the default extraction schema
         self.parameters_schema = parameters_schema or self._generate_default_schema()
 
-    def _generate_default_schema(self) -> Dict:
+    def _generate_default_schema(self) -> dict:
         """Default JSON Schema for extracting research insights from a paper.
 
         The schema is intentionally simple and LLM-friendly. It focuses on
@@ -636,7 +634,15 @@ class PDFExtractor:
         response = self.client.chat_completion(messages, response_format=self.parameters_schema)
         return response
     
-    def normalize_extracted_parameters(self, extracted_response: Dict, existing_ontology: Dict = {}):
+    def normalize_extracted_parameters(
+        self, extracted_response: dict, existing_ontology: dict | None = None
+    ):
+        # Normalized here rather than defaulted in the signature: a shared
+        # mutable default is one accidental mutation away from leaking one
+        # paper's ontology into the next call. `{}` keeps the prompt text
+        # identical to before, where `null` would not.
+        existing_ontology = existing_ontology if existing_ontology is not None else {}
+
         messages = [
             {
                 "role": "system",

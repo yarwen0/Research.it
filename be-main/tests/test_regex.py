@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from utils.regex import compute_months, compute_years, remove_year, extract_references_from_string
+from utils.regex import compute_months, compute_years, extract_references_from_string, remove_year
 
 
 class TestComputeMonths:

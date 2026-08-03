@@ -6,28 +6,29 @@ and movable behind a job queue without touching these.
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import tempfile
-from typing import AsyncGenerator, Optional, Any, List
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse, FileResponse
-from starlette.background import BackgroundTask
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, field_validator
+from starlette.background import BackgroundTask
 
-from core import create_llm_client
-from db.repositories import GraphRepository
-from db.session import session_scope
+from api.arxiv import ArxivClient
+from api.review import ReviewManager
 from config import (
     RATE_LIMIT_COMPILE,
     RATE_LIMIT_RESEARCH,
     RATE_LIMIT_REVIEW,
 )
+from core import ReferenceParameterExtractorFallback, create_llm_client
+from db.repositories import GraphRepository
+from db.session import session_scope
 from rate_limit import limiter
-from api.arxiv import ArxivClient
-from api.review import ReviewManager
-from core import ReferenceParameterExtractorFallback
 from services.events import StatusType
 from services.jobs import JobNotFoundError, get_job, start_job, tail_events
 from services.research_pipeline import ResearchPipeline
@@ -48,7 +49,7 @@ class ResearchRequest(BaseModel):
     """Model for arXiv-based research request"""
     user_prompt: str  # User's research interest or topic
     num_topics: int = 10  # Number of topics to generate when none are provided
-    topics: Optional[List[str]] = None  # Optional explicit topics to process
+    topics: list[str] | None = None  # Optional explicit topics to process
     papers_per_topic: int = 5  # Number of papers to fetch per topic
     use_reranking: bool = True  # Whether to use vector-based reranking (default: True)
     broad_search_multiplier: int = 4  # Multiplier for broad search when reranking (fewer arXiv calls)
@@ -99,7 +100,7 @@ class SSEUpdate(BaseModel):
     """Model for SSE updates sent to the frontend"""
     status: StatusType
     message: str
-    result: Optional[dict[str, Any]] = None
+    result: dict[str, Any] | None = None
     
     def to_sse(self) -> str:
         """Convert to SSE format"""
@@ -193,8 +194,10 @@ async def get_job_endpoint(job_id: str):
     """
     try:
         return get_job(job_id)
-    except JobNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    except JobNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Job not found: {job_id}"
+        ) from exc
 
 
 @router.get("/jobs/{job_id}/events")
@@ -208,8 +211,10 @@ async def stream_job_events_endpoint(job_id: str, after: int = -1):
     """
     try:
         get_job(job_id)
-    except JobNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    except JobNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Job not found: {job_id}"
+        ) from exc
 
     return StreamingResponse(
         job_event_stream(job_id, after=after),
@@ -323,10 +328,10 @@ async def create_review_stream(
             await asyncio.sleep(0)
         
     except Exception as e:
-        logger.error(f"Review generation error: {str(e)}", exc_info=True)
+        logger.error(f"Review generation error: {e!s}", exc_info=True)
         yield SSEUpdate(
             status=StatusType.ERROR,
-            message=f"Review generation failed: {str(e)}"
+            message=f"Review generation failed: {e!s}"
         ).to_sse()
 
 
@@ -404,12 +409,12 @@ async def get_review_endpoint(review_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving review: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve review: {str(e)}")
+        logger.error(f"Error retrieving review: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve review: {e!s}") from e
 
 
 @router.get("/reviews")
-async def list_reviews_endpoint(saved_filepath: Optional[str] = None):
+async def list_reviews_endpoint(saved_filepath: str | None = None):
     """
     List all reviews, optionally filtered by source dataset.
     
@@ -436,8 +441,8 @@ async def list_reviews_endpoint(saved_filepath: Optional[str] = None):
         }
         
     except Exception as e:
-        logger.error(f"Error listing reviews: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list reviews: {str(e)}")
+        logger.error(f"Error listing reviews: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list reviews: {e!s}") from e
 
 
 class LatexCompileRequest(BaseModel):
@@ -484,13 +489,13 @@ async def compile_latex_endpoint(request: Request, payload: LatexCompileRequest)
         )
     except LatexUnavailableError as e:
         logger.error("LaTeX toolchain unavailable: %s", e)
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except LatexCompilationError as e:
         logger.warning("LaTeX compilation failed: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error compiling LaTeX: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to compile LaTeX: {str(e)}")
+        logger.error(f"Error compiling LaTeX: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to compile LaTeX: {e!s}") from e
 
     # FileResponse streams from disk, so the file has to outlive this function
     # and is removed by the background task once the response is sent.
@@ -499,10 +504,8 @@ async def compile_latex_endpoint(request: Request, payload: LatexCompileRequest)
         tmp_file_path = tmp_file.name
 
     def cleanup():
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_file_path)
-        except OSError:
-            pass
 
     return FileResponse(
         tmp_file_path,
@@ -539,5 +542,5 @@ async def get_graph_endpoint(project_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving graph: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve graph: {str(e)}")
+        logger.error(f"Error retrieving graph: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve graph: {e!s}") from e

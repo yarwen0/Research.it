@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -48,7 +49,7 @@ class ProjectRepository:
         self,
         project_id: str,
         user_prompt: str,
-        topics: Optional[list[str]] = None,
+        topics: list[str] | None = None,
     ) -> Project:
         project = Project(
             id=project_id,
@@ -59,7 +60,7 @@ class ProjectRepository:
         self.session.flush()
         return project
 
-    def get(self, project_id: str) -> Optional[Project]:
+    def get(self, project_id: str) -> Project | None:
         return self.session.get(Project, project_id)
 
     def exists(self, project_id: str) -> bool:
@@ -153,7 +154,7 @@ class GraphRepository:
         self._attach_authors(paper, paper_data.get("authors", []))
         return paper
 
-    def add_reference(self, source: Paper, reference: dict[str, Any]) -> Optional[Paper]:
+    def add_reference(self, source: Paper, reference: dict[str, Any]) -> Paper | None:
         """Record a work cited by ``source``, returning the target node.
 
         References are deduplicated by normalized title within the project. The
@@ -430,10 +431,10 @@ class ReviewRepository:
         latex_content: str,
         *,
         title: str = "",
-        project_id: Optional[str] = None,
-        source_filepath: Optional[str] = None,
-        bibliography: Optional[list[Any]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        project_id: str | None = None,
+        source_filepath: str | None = None,
+        bibliography: list[Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Review:
         review = self.session.scalar(
             select(Review).where(Review.review_id == review_id)
@@ -452,12 +453,12 @@ class ReviewRepository:
         self.session.flush()
         return review
 
-    def get(self, review_id: str) -> Optional[Review]:
+    def get(self, review_id: str) -> Review | None:
         return self.session.scalar(
             select(Review).where(Review.review_id == review_id)
         )
 
-    def list(self, source_filepath: Optional[str] = None) -> list[Review]:
+    def list(self, source_filepath: str | None = None) -> list[Review]:
         stmt = select(Review).order_by(Review.created_at.desc())
         if source_filepath:
             stmt = stmt.where(Review.source_filepath == source_filepath)

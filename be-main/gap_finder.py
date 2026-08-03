@@ -15,14 +15,14 @@ can explain *why* a gap was surfaced.
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
 import json
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
 
 
-def _rank(gaps: List["Gap"]) -> List["Gap"]:
+def _rank(gaps: list[Gap]) -> list[Gap]:
     """Order gaps by score, breaking ties on identity rather than insertion.
 
     Scores are a min() over three small counts, so ties are the norm rather
@@ -44,10 +44,10 @@ def _rank(gaps: List["Gap"]) -> List["Gap"]:
     )
 
 
-def _unwrap_normalized_list(items: Iterable | None) -> List[str]:
+def _unwrap_normalized_list(items: Iterable | None) -> list[str]:
     """Return only the normalized tokens from schema-conforming lists."""
 
-    normalized: List[str] = []
+    normalized: list[str] = []
     if not items:
         return normalized
     for item in items:
@@ -64,14 +64,14 @@ class Paper:
 
     paper_id: str
     problem: str
-    methods: List[str]
-    datasets: List[str]
-    limitations_implied: List[str]
-    limitations_explicit: List[str]
-    future_work: List[str]
+    methods: list[str]
+    datasets: list[str]
+    limitations_implied: list[str]
+    limitations_explicit: list[str]
+    future_work: list[str]
 
     @classmethod
-    def from_canonical(cls, data: Dict) -> "Paper":
+    def from_canonical(cls, data: dict) -> Paper:
         return cls(
             paper_id=data.get("paper_id") or data["id"],
             problem=data.get("problem", ""),
@@ -92,9 +92,9 @@ class Gap:
     dataset: str | None = None
     limitation: str | None = None
     future_work_label: str | None = None
-    metadata: Dict[str, object] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
-    def to_title_condition(self) -> Dict[str, object]:
+    def to_title_condition(self) -> dict[str, object]:
         """Return a minimal spec consumable by a title generator LLM."""
 
         return {
@@ -136,13 +136,13 @@ class GapFinder:
             self.limitation_ratio_threshold = max(0.2, limitation_ratio_threshold * 0.5)
             self.future_work_min_mentions = max(1, future_work_min_mentions - 1)
 
-        self.methods_by_problem: Dict[str, set[str]] = defaultdict(set)
-        self.datasets_by_problem: Dict[str, set[str]] = defaultdict(set)
-        self.methods_by_problem_dataset: Dict[tuple[str, str], set[str]] = defaultdict(set)
-        self.datasets_by_problem_method: Dict[tuple[str, str], set[str]] = defaultdict(set)
-        self.problem_to_paper_ids: Dict[str, List[str]] = defaultdict(list)
-        self.problem_dataset_to_paper_ids: Dict[tuple[str, str], List[str]] = defaultdict(list)
-        self.problem_method_to_paper_ids: Dict[tuple[str, str], List[str]] = defaultdict(list)
+        self.methods_by_problem: dict[str, set[str]] = defaultdict(set)
+        self.datasets_by_problem: dict[str, set[str]] = defaultdict(set)
+        self.methods_by_problem_dataset: dict[tuple[str, str], set[str]] = defaultdict(set)
+        self.datasets_by_problem_method: dict[tuple[str, str], set[str]] = defaultdict(set)
+        self.problem_to_paper_ids: dict[str, list[str]] = defaultdict(list)
+        self.problem_dataset_to_paper_ids: dict[tuple[str, str], list[str]] = defaultdict(list)
+        self.problem_method_to_paper_ids: dict[tuple[str, str], list[str]] = defaultdict(list)
         self.count_problem: Counter[str] = Counter()
         self.count_problem_dataset: Counter[tuple[str, str]] = Counter()
         self.count_problem_method: Counter[tuple[str, str]] = Counter()
@@ -150,7 +150,7 @@ class GapFinder:
         self.limitations_by_problem: Counter[tuple[str, str]] = Counter()
         self.limitations_by_problem_method: Counter[tuple[str, str, str]] = Counter()
         self.future_work_counts: Counter[str] = Counter()
-        self.future_work_by_problem: Dict[str, Counter[str]] = defaultdict(Counter)
+        self.future_work_by_problem: dict[str, Counter[str]] = defaultdict(Counter)
         self.method_global_counts: Counter[str] = Counter()
         self.dataset_global_counts: Counter[str] = Counter()
 
@@ -195,8 +195,8 @@ class GapFinder:
                 self.future_work_counts[fw] += 1
                 self.future_work_by_problem[problem][fw] += 1
 
-    def find_method_transfer_gaps(self, *, top_k: int = 5) -> List[Gap]:
-        gaps: List[Gap] = []
+    def find_method_transfer_gaps(self, *, top_k: int = 5) -> list[Gap]:
+        gaps: list[Gap] = []
         global_methods = set(self.method_global_counts)
         global_datasets = set(self.dataset_global_counts)
         for problem, methods in sorted(self.methods_by_problem.items()):
@@ -242,8 +242,8 @@ class GapFinder:
                     )
         return _rank(gaps)[:top_k]
 
-    def find_dataset_transfer_gaps(self, *, top_k: int = 5) -> List[Gap]:
-        gaps: List[Gap] = []
+    def find_dataset_transfer_gaps(self, *, top_k: int = 5) -> list[Gap]:
+        gaps: list[Gap] = []
         global_methods = set(self.method_global_counts)
         global_datasets = set(self.dataset_global_counts)
         for problem, methods in self.methods_by_problem.items():
@@ -289,15 +289,15 @@ class GapFinder:
                     )
         return _rank(gaps)[:top_k]
 
-    def find_limitation_gaps(self, *, top_k: int = 5) -> List[Gap]:
-        gaps: List[Gap] = []
+    def find_limitation_gaps(self, *, top_k: int = 5) -> list[Gap]:
+        gaps: list[Gap] = []
         for (problem, limitation), count in sorted(self.limitations_by_problem.items()):
             if count < self.limitation_pressure_threshold:
                 continue
             methods = self.methods_by_problem.get(problem, set())
             if not methods:
                 continue
-            method_ratios: Dict[str, float] = {}
+            method_ratios: dict[str, float] = {}
             saturated = True
             allowed_failures = 0
             if self.loose_mode:
@@ -331,14 +331,14 @@ class GapFinder:
                 )
         return _rank(gaps)[:top_k]
 
-    def find_future_work_gaps(self, *, top_k: int = 5) -> List[Gap]:
-        problem_candidates: Dict[str, Dict[str, int]] = defaultdict(dict)
+    def find_future_work_gaps(self, *, top_k: int = 5) -> list[Gap]:
+        problem_candidates: dict[str, dict[str, int]] = defaultdict(dict)
         for problem, fw_counter in sorted(self.future_work_by_problem.items()):
             for fw_label, count in sorted(fw_counter.items()):
                 problem_candidates[fw_label][problem] = count
 
-        gaps: List[Gap] = []
-        future_work_realized: Dict[str, int] = {
+        gaps: list[Gap] = []
+        future_work_realized: dict[str, int] = {
             label: self.method_global_counts.get(label, 0) + self.count_problem.get(label, 0)
             for label in self.future_work_counts
         }
@@ -370,8 +370,8 @@ class GapFinder:
             )
         return _rank(gaps)[:top_k]
 
-    def find_all_gaps(self, *, top_k_per_type: int = 5) -> List[Gap]:
-        results: List[Gap] = []
+    def find_all_gaps(self, *, top_k_per_type: int = 5) -> list[Gap]:
+        results: list[Gap] = []
         results.extend(self.find_method_transfer_gaps(top_k=top_k_per_type))
         results.extend(self.find_dataset_transfer_gaps(top_k=top_k_per_type))
         results.extend(self.find_limitation_gaps(top_k=top_k_per_type))
@@ -379,7 +379,7 @@ class GapFinder:
         return results
 
 
-def load_papers_from_path(path: str | Path) -> List[Paper]:
+def load_papers_from_path(path: str | Path) -> list[Paper]:
     path_obj = Path(path)
     with path_obj.open("r", encoding="utf-8") as handle:
         data = json.load(handle)

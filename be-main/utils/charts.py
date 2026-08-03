@@ -6,7 +6,7 @@ frontend renders one structure regardless of which analysis emitted it.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 ChartType = Literal["line", "bar", "pie", "scatter", "area", "radar", "heatmap", "sankey", "wordcloud"]
 LayoutType = Literal["horizontal", "vertical"]
@@ -16,13 +16,13 @@ def create_chart_response(
     chart_type: ChartType,
     title: str,
     description: str,
-    data_points: List[Dict[str, Any]],
-    series: List[Dict[str, Any]],
-    x_axis_label: Optional[str] = None,
-    y_axis_label: Optional[str] = None,
-    layout: Optional[LayoutType] = None,
+    data_points: list[dict[str, Any]],
+    series: list[dict[str, Any]],
+    x_axis_label: str | None = None,
+    y_axis_label: str | None = None,
+    layout: LayoutType | None = None,
     stacked: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a standardized chart response structure.
     

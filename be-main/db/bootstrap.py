@@ -11,9 +11,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 
+from alembic import command
 from config import AUTO_MIGRATE, DATABASE_URL
 
 logger = logging.getLogger(__name__)

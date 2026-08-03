@@ -18,19 +18,21 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, ClassVar
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -42,7 +44,7 @@ def _utcnow() -> datetime:
 class Base(DeclarativeBase):
     """Declarative base. `type_annotation_map` keeps column types portable."""
 
-    type_annotation_map = {
+    type_annotation_map: ClassVar[dict] = {
         dict[str, Any]: JSON,
         list[Any]: JSON,
     }
@@ -56,21 +58,21 @@ class Project(Base):
     # uuid4().hex, matching the project_id already handed to the frontend.
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     user_prompt: Mapped[str] = mapped_column(Text)
-    topics: Mapped[Optional[list[Any]]] = mapped_column(JSON, default=None)
+    topics: Mapped[list[Any] | None] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
     )
 
-    papers: Mapped[list["Paper"]] = relationship(
+    papers: Mapped[list[Paper]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    authors: Mapped[list["Author"]] = relationship(
+    authors: Mapped[list[Author]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    citations: Mapped[list["Citation"]] = relationship(
+    citations: Mapped[list[Citation]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    ontology_terms: Mapped[list["OntologyTerm"]] = relationship(
+    ontology_terms: Mapped[list[OntologyTerm]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 
@@ -110,32 +112,32 @@ class Paper(Base):
     # arXiv id for processed papers; a generated hex id for bare references.
     external_id: Mapped[str] = mapped_column(String(255))
     title: Mapped[str] = mapped_column(Text, default="")
-    published: Mapped[Optional[str]] = mapped_column(String(64), default=None)
-    pdf_url: Mapped[Optional[str]] = mapped_column(Text, default=None)
-    topic: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    published: Mapped[str | None] = mapped_column(String(64), default=None)
+    pdf_url: Mapped[str | None] = mapped_column(Text, default=None)
+    topic: Mapped[str | None] = mapped_column(Text, default=None)
 
     # False for references discovered in a bibliography but never fetched.
     is_processed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Raw LLM pipeline output. Kept as JSON on purpose: the schema is set by
     # the extraction prompt and changes with it, so columns would be churn.
-    extraction: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
-    normalized: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    extraction: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    normalized: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
 
-    project: Mapped["Project"] = relationship(back_populates="papers")
-    authors: Mapped[list["Author"]] = relationship(
+    project: Mapped[Project] = relationship(back_populates="papers")
+    authors: Mapped[list[Author]] = relationship(
         secondary="paper_authors", back_populates="papers"
     )
-    cites: Mapped[list["Citation"]] = relationship(
+    cites: Mapped[list[Citation]] = relationship(
         back_populates="source",
         foreign_keys="Citation.source_paper_id",
         cascade="all, delete-orphan",
     )
-    cited_by: Mapped[list["Citation"]] = relationship(
+    cited_by: Mapped[list[Citation]] = relationship(
         back_populates="target",
         foreign_keys="Citation.target_paper_id",
         cascade="all, delete-orphan",
@@ -162,8 +164,8 @@ class Author(Base):
     slug: Mapped[str] = mapped_column(String(512))
     name: Mapped[str] = mapped_column(Text)
 
-    project: Mapped["Project"] = relationship(back_populates="authors")
-    papers: Mapped[list["Paper"]] = relationship(
+    project: Mapped[Project] = relationship(back_populates="authors")
+    papers: Mapped[list[Paper]] = relationship(
         secondary="paper_authors", back_populates="authors"
     )
 
@@ -193,11 +195,11 @@ class Citation(Base):
         ForeignKey("papers.id", ondelete="CASCADE"), index=True
     )
 
-    project: Mapped["Project"] = relationship(back_populates="citations")
-    source: Mapped["Paper"] = relationship(
+    project: Mapped[Project] = relationship(back_populates="citations")
+    source: Mapped[Paper] = relationship(
         back_populates="cites", foreign_keys=[source_paper_id]
     )
-    target: Mapped["Paper"] = relationship(
+    target: Mapped[Paper] = relationship(
         back_populates="cited_by", foreign_keys=[target_paper_id]
     )
 
@@ -229,7 +231,7 @@ class OntologyTerm(Base):
     paper_external_id: Mapped[str] = mapped_column(String(255))
     original_text: Mapped[str] = mapped_column(Text, default="")
 
-    project: Mapped["Project"] = relationship(back_populates="ontology_terms")
+    project: Mapped[Project] = relationship(back_populates="ontology_terms")
 
 
 class JobStatus(str, Enum):
@@ -253,7 +255,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    project_id: Mapped[Optional[str]] = mapped_column(
+    project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), default=None, index=True
     )
 
@@ -265,8 +267,8 @@ class Job(Base):
     user_prompt: Mapped[str] = mapped_column(Text, default="")
     # Request parameters, so a run can be described (or replayed) after the
     # fact without the original request.
-    params: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
-    error: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    params: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    error: Mapped[str | None] = mapped_column(Text, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
@@ -275,7 +277,7 @@ class Job(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
 
-    events: Mapped[list["JobEvent"]] = relationship(
+    events: Mapped[list[JobEvent]] = relationship(
         back_populates="job",
         cascade="all, delete-orphan",
         order_by="JobEvent.sequence",
@@ -305,13 +307,13 @@ class JobEvent(Base):
 
     status: Mapped[str] = mapped_column(String(32))
     message: Mapped[str] = mapped_column(Text, default="")
-    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
 
-    job: Mapped["Job"] = relationship(back_populates="events")
+    job: Mapped[Job] = relationship(back_populates="events")
 
 
 class Review(Base):
@@ -325,16 +327,16 @@ class Review(Base):
 
     # Nullable: reviews predating project tracking, and reviews generated from
     # an uploaded dataset rather than a run.
-    project_id: Mapped[Optional[str]] = mapped_column(
+    project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), default=None, index=True
     )
-    source_filepath: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    source_filepath: Mapped[str | None] = mapped_column(Text, default=None)
 
     title: Mapped[str] = mapped_column(Text, default="")
     latex_content: Mapped[str] = mapped_column(Text, default="")
-    bibliography: Mapped[Optional[list[Any]]] = mapped_column(JSON, default=None)
+    bibliography: Mapped[list[Any] | None] = mapped_column(JSON, default=None)
     # `metadata` is reserved on the declarative base.
-    review_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    review_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, default=None
     )
 

@@ -8,21 +8,21 @@ This module implements a comprehensive review generation pipeline:
 4. Use semantic search to find relevant content
 5. Generate LaTeX review using LLM
 """
-import logging
 import json
+import logging
 import random
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
+from typing import Any
+
 import arxiv
 
 from api.arxiv import fetch_arxiv_search_results
+from constants.prompts.review_system_prompt import REVIEW_SYSTEM_PROMPT
 from core import OpenRouterClient
 from db.repositories import ReviewRepository
 from db.session import session_scope
 from utils.embeddings import EmbeddingManager
 from utils.paths import DATA_DIR, resolve_data_path
-from constants.prompts.review_system_prompt import REVIEW_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class ReviewManager:
         self.pdfs_dir = DATA_DIR / "pdfs"
         self.pdfs_dir.mkdir(parents=True, exist_ok=True)
     
-    def _load_saved_papers(self, saved_filepath: str) -> Dict[str, Any]:
+    def _load_saved_papers(self, saved_filepath: str) -> dict[str, Any]:
         """
         Load papers from saved processed file.
 
@@ -68,7 +68,7 @@ class ReviewManager:
         resolved = resolve_data_path(saved_filepath)
         logger.info("Loading papers from %s", resolved)
 
-        with open(resolved, 'r', encoding='utf-8') as f:
+        with open(resolved, encoding='utf-8') as f:
             data = json.load(f)
 
         logger.info(f"Loaded {data.get('total_papers', 0)} papers")
@@ -76,10 +76,10 @@ class ReviewManager:
     
     def _select_base_papers(
         self, 
-        papers: List[Dict[str, Any]], 
-        target_keywords: List[str],
+        papers: list[dict[str, Any]], 
+        target_keywords: list[str],
         num_papers: int = 2
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Select the most relevant papers from saved dataset as base papers.
         
@@ -129,10 +129,10 @@ class ReviewManager:
     
     def _search_arxiv_diverse(
         self,
-        keywords: List[str],
+        keywords: list[str],
         topic: str,
         papers_per_variant: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search arXiv with diverse strategies to get varied papers.
         
@@ -149,7 +149,7 @@ class ReviewManager:
         Returns:
             List of paper metadata dictionaries
         """
-        logger.info(f"Searching arXiv with diverse strategies")
+        logger.info("Searching arXiv with diverse strategies")
         
         all_papers = {}  # Use dict to deduplicate by arxiv_id
         
@@ -215,7 +215,7 @@ class ReviewManager:
         
         return papers_list
     
-    def _download_and_extract_pdf(self, pdf_url: str, arxiv_id: str) -> Optional[Dict[str, str]]:
+    def _download_and_extract_pdf(self, pdf_url: str, arxiv_id: str) -> dict[str, str] | None:
         """
         Download PDF and extract text content using ArxivClient with smart sectioning.
         
@@ -252,11 +252,11 @@ class ReviewManager:
     
     def _create_chunks_from_papers(
         self,
-        papers: List[Dict[str, Any]],
+        papers: list[dict[str, Any]],
         chunk_size: int = 1000,
         overlap: int = 200,
         prioritize_key_sections: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Create text chunks from papers with metadata.
         Uses smart chunking that prioritizes first and last pages.
@@ -373,12 +373,12 @@ class ReviewManager:
     
     def _select_relevant_chunks(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: list[dict[str, Any]],
         query: str,
-        top_k: Optional[int] = 50,
+        top_k: int | None = 50,
         use_priority_weighting: bool = True,
         max_chunks_to_rank: int = 500
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Select most relevant chunks using semantic similarity with priority weighting.
         Chunks from first/last pages get boosted scores.
@@ -473,9 +473,9 @@ class ReviewManager:
     
     def _generate_latex_review(
         self,
-        chunks: List[Dict[str, Any]],
+        chunks: list[dict[str, Any]],
         topic: str,
-        keywords: List[str]
+        keywords: list[str]
     ) -> str:
         """
         Generate LaTeX review using LLM.
@@ -538,8 +538,8 @@ Generate the complete LaTeX review now:"""
     
     def _create_bibliography_metadata(
         self,
-        chunks: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        chunks: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Create bibliography metadata from chunks.
         
@@ -567,11 +567,11 @@ Generate the complete LaTeX review now:"""
         self,
         saved_filepath: str,
         paper_index: int,
-        paper_info: Dict[str, Any],
+        paper_info: dict[str, Any],
         num_base_papers: int = 2,
         num_arxiv_papers_per_variant: int = 5,
         num_relevant_chunks: int = 50,
-        progress_callback: Optional[Any] = None
+        progress_callback: Any | None = None
     ):
         """
         Create a comprehensive review with progress callbacks for SSE streaming.
@@ -592,7 +592,7 @@ Generate the complete LaTeX review now:"""
         Returns:
             Final dictionary containing review data and metadata
         """
-        def emit_progress(status: str, message: str, result: Optional[Dict[str, Any]] = None):
+        def emit_progress(status: str, message: str, result: dict[str, Any] | None = None):
             """
             Emit progress event following SSE format.
             
@@ -644,9 +644,9 @@ Generate the complete LaTeX review now:"""
         processed_count = 0
         
         # Process base papers (silently, no individual updates)
-        for idx, paper in enumerate(base_papers):
+        for _idx, paper in enumerate(base_papers):
             paper_copy = paper.copy()
-            if "pdf_url" in paper and paper["pdf_url"]:
+            if paper.get("pdf_url"):
                 text_data = self._download_and_extract_pdf(
                     paper["pdf_url"],
                     paper.get("arxiv_id", f"base_{hash(paper['title'])}")
@@ -657,7 +657,7 @@ Generate the complete LaTeX review now:"""
             all_papers.append(paper_copy)
         
         # Process arXiv papers (silently, no individual updates)
-        for idx, paper in enumerate(arxiv_papers):
+        for _idx, paper in enumerate(arxiv_papers):
             text_data = self._download_and_extract_pdf(
                 paper["pdf_url"],
                 paper["arxiv_id"]
@@ -785,11 +785,11 @@ Generate the complete LaTeX review now:"""
         self,
         saved_filepath: str,
         paper_index: int,
-        paper_info: Dict[str, Any],
+        paper_info: dict[str, Any],
         num_base_papers: int = 2,
         num_arxiv_papers_per_variant: int = 5,
         num_relevant_chunks: int = 50
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a comprehensive review using the full pipeline (non-streaming version).
         
@@ -813,7 +813,7 @@ Generate the complete LaTeX review now:"""
             raise ValueError("Review generation failed to produce a result")
         return result
     
-    def get_review(self, review_id: str) -> Optional[Dict[str, Any]]:
+    def get_review(self, review_id: str) -> dict[str, Any] | None:
         """
         Retrieve a specific review by ID.
         
@@ -838,7 +838,7 @@ Generate the complete LaTeX review now:"""
                 "metadata": review.review_metadata or {},
             }
     
-    def list_reviews(self, saved_filepath: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_reviews(self, saved_filepath: str | None = None) -> list[dict[str, Any]]:
         """
         List all reviews, optionally filtered by source dataset.
         
