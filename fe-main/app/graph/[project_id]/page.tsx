@@ -1,11 +1,6 @@
-import dynamic from 'next/dynamic';
 import { fetchGraph } from '@/lib/api';
 
-// Dynamically import the graph renderer with no SSR
-const RefGraphRenderer = dynamic(
-    () => import('./_components/ref-graph-renderer'),
-    { ssr: false }
-);
+import GraphClient from './_components/graph-client';
 
 function GraphNotFound({ projectId }: { projectId: string }) {
     return (
@@ -22,13 +17,18 @@ function GraphNotFound({ projectId }: { projectId: string }) {
     );
 }
 
-export default async function GraphPage({ params }: { params: { project_id: string } }) {
-    const project_id = params.project_id;
+export default async function GraphPage({
+    params,
+}: {
+    // Next 15 onwards resolves route params asynchronously.
+    params: Promise<{ project_id: string }>;
+}) {
+    const { project_id } = await params;
 
     try {
         const graphData = await fetchGraph(project_id);
         return (
-            <RefGraphRenderer
+            <GraphClient
                 data={{
                     status: 'success',
                     project_id,
