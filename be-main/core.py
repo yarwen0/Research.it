@@ -14,11 +14,13 @@ from pydantic import BaseModel, Field
 from config import (
     GEMINI_API_KEY,
     LLM_PROVIDER,
+    NO_LLM_PROVIDER_MESSAGE,
     OLLAMA_BASE_URL,
     OLLAMA_EMBED_MODEL,
     OLLAMA_MODEL,
     OPENROUTER_API_KEY,
     OPENROUTER_FOR_EMBEDDINGS,
+    has_llm_provider,
 )
 from constants.prompts.extractor_system_prompt import EXTRACTOR_SYSTEM_PROMPT
 from constants.prompts.normalizer_system_prompt import NORMALIZER_SYSTEM_PROMPT
@@ -374,6 +376,11 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
       2. GEMINI_API_KEY present → Gemini
       3. OPENROUTER_API_KEY present → OpenRouter
     """
+    # Validated here rather than at import, so work that needs no LLM — running
+    # migrations, most obviously — does not require a key to be configured.
+    if not has_llm_provider():
+        raise RuntimeError(NO_LLM_PROVIDER_MESSAGE)
+
     provider = (LLM_PROVIDER or "").strip().lower()
 
     if not provider:

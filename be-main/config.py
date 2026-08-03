@@ -98,12 +98,25 @@ RATE_LIMIT_COMPILE = _maybe("RATE_LIMIT_COMPILE") or "30/minute"
 # the proxy's address and one caller can exhaust everyone's quota.
 TRUST_PROXY_HEADERS = _truthy(os.getenv("TRUST_PROXY_HEADERS"))
 
-if (LLM_PROVIDER or "").strip().lower() != "ollama" and not GEMINI_API_KEY and not OPENROUTER_API_KEY:
-    raise RuntimeError(
-        "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
-        "(no key needed), or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
-        "or OPENROUTER_API_KEY in your .env file."
-    )
+NO_LLM_PROVIDER_MESSAGE = (
+    "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
+    "(no key needed), or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
+    "or OPENROUTER_API_KEY in your .env file."
+)
+
+
+def has_llm_provider() -> bool:
+    """Whether any usable LLM provider is configured.
+
+    Checked when a client is built rather than raised at import. Importing
+    config used to fail outright without a key, which meant work that never
+    touches an LLM — running migrations, most obviously — could not proceed
+    without one.
+    """
+    if (LLM_PROVIDER or "").strip().lower() == "ollama":
+        return True
+    return bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
+
 
 # Back-compat: keep OPENROUTER_API_KEY non-null so existing imports do not crash.
 # Modules that only ever used the OpenRouter key will fall back to the Gemini
