@@ -18,11 +18,11 @@ from pylatex import Document, NoEscape
 from core import (
     OpenRouterClient,
     PDFExtractor,
-    OntologyStorage,
     ReferenceParameterExtractorFallback,
-    ReferenceGraph,
     create_llm_client,
 )
+from db.repositories import GraphRepository, OntologyRepository, ProjectRepository
+from db.session import session_scope
 from config import (
     OPENROUTER_API_KEY,
     GEMINI_API_KEY,
@@ -200,10 +200,8 @@ async def arxiv_research_stream(
         # Initialize clients (auto-selects Gemini when GEMINI_API_KEY is set)
         llm_client = create_llm_client()
 
-        reference_graph = ReferenceGraph(project_id=project_id)
-
         extractor_fallback = ReferenceParameterExtractorFallback()
-        
+
         arxiv_client = ArxivClient(
             max_results_per_topic=papers_per_topic,
             reference_extractor_fallback=extractor_fallback,
@@ -211,9 +209,13 @@ async def arxiv_research_stream(
             )
         topic_generator = TopicGenerator(llm_client)
         extractor = PDFExtractor(llm_client=llm_client)
-        ontology_store = OntologyStorage()
-        
+
         loop = asyncio.get_event_loop()
+
+        # The project row anchors every paper, author, edge and ontology term
+        # written below, so it has to exist before any of them.
+        with session_scope() as session:
+            ProjectRepository(session).create(project_id, user_prompt)
         if provided_topics:
             topics_to_process = provided_topics
             yield SSEUpdate(
@@ -366,12 +368,16 @@ async def arxiv_research_stream(
                     # Map to ontology
                     logger.debug(f"Mapping to ontology for paper {paper_id}")
                     paper_id = paper_data['paper_id']
-                    await loop.run_in_executor(
-                        None, 
-                        ontology_store.map_to_ontology, 
-                        normalized_data, 
-                        paper_id
-                    )
+
+                    def map_ontology(normalized=normalized_data, pid=paper_id):
+                        # A short transaction per paper: a run holding one open
+                        # for its full duration would block every other writer.
+                        with session_scope() as session:
+                            OntologyRepository(session, project_id).map_paper(
+                                normalized, pid
+                            )
+
+                    await loop.run_in_executor(None, map_ontology)
                     logger.debug(f"Ontology mapping complete for paper {paper_id}")
                     
                     processed_paper = {
@@ -417,68 +423,15 @@ async def arxiv_research_stream(
         ).to_sse()
         await asyncio.sleep(0)
         
-        # Helper function to create author ID
-        def create_author_id(author_name: str) -> str:
-            """Create a consistent ID for an author."""
-            return f"author_{author_name.replace(' ', '_').replace('.', '').lower()}"
-        
-        # Track created authors to avoid duplicates
-        created_authors = set()
-        
-        for paper in all_processed_papers:
-            paper_id = paper["paper_id"]
-            
-            # Create paper node
-            reference_graph.create_node_no_sync(paper_id, paper, True)
-            
-            # Create author nodes and authorship edges for this paper
-            authors = paper.get("authors", [])
-            if authors and isinstance(authors, list):
-                for author in authors:
-                    if author and isinstance(author, str):
-                        author_id = create_author_id(author)
-                        
-                        # Create author node if not already created
-                        if author_id not in created_authors:
-                            author_data = {
-                                "title": author,
-                                "label": author,
-                                "node_type": "author"
-                            }
-                            reference_graph.create_node_no_sync(author_id, author_data, False)
-                            created_authors.add(author_id)
-                        
-                        # Create authorship edge from paper to author
-                        reference_graph.create_edge_no_sync(paper_id, author_id, edge_type="authorship")
-            
-            # Create reference nodes and citation edges
-            for ref in paper.get("references", []):
-                if len(ref.get("title", "")) > 6:
-                    ref_paper_id = uuid.uuid4().hex
-                    reference_graph.create_node_no_sync(ref_paper_id, ref, False)
-                    reference_graph.create_edge_no_sync(paper_id, ref_paper_id, edge_type="citation")
-                    
-                    # Create author nodes and authorship edges for reference authors
-                    ref_authors = ref.get("authors", [])
-                    if ref_authors and isinstance(ref_authors, list):
-                        for author in ref_authors:
-                            if author and isinstance(author, str):
-                                author_id = create_author_id(author)
-                                
-                                # Create author node if not already created
-                                if author_id not in created_authors:
-                                    author_data = {
-                                        "title": author,
-                                        "label": author,
-                                        "node_type": "author"
-                                    }
-                                    reference_graph.create_node_no_sync(author_id, author_data, False)
-                                    created_authors.add(author_id)
-                                
-                                # Create authorship edge from reference to author
-                                reference_graph.create_edge_no_sync(ref_paper_id, author_id, edge_type="authorship")
-        
-        reference_graph.sync_to_disk()
+        def persist_graph():
+            with session_scope() as session:
+                GraphRepository(session, project_id).build_from_processed_papers(
+                    all_processed_papers
+                )
+
+        # Hundreds of inserts for a full run — keep them off the event loop so
+        # concurrent SSE streams keep flowing.
+        await loop.run_in_executor(None, persist_graph)
 
         yield SSEUpdate(
             status=StatusType.PROCESSING,
@@ -499,8 +452,13 @@ async def arxiv_research_stream(
             "papers": all_processed_papers
         }
         
+        # TrendsCreator still consumes the nested ontology shape, so rebuild it
+        # from the rows this run contributed.
+        with session_scope() as session:
+            ontology = OntologyRepository(session, project_id).as_dict()
+
         # Pass LLM client to TrendsCreator for dataset validation
-        trends_creator = TrendsCreator(trends_data, ontology_store.ontology, llm_client=llm_client)
+        trends_creator = TrendsCreator(trends_data, ontology, llm_client=llm_client)
         trends = await loop.run_in_executor(None, trends_creator.create_all_trends)
         
         logger.info(f"Generated trend analysis with {len(trends)} chart types")
@@ -982,55 +940,16 @@ async def get_graph_endpoint(project_id: str):
     Returns nodes and edges as stored in the graph (including authors).
     """
     try:
-        reference_graph = ReferenceGraph(project_id=project_id)
-        graph_data = {}
+        with session_scope() as session:
+            graph_repo = GraphRepository(session, project_id)
 
-        processed_nodes = []
-        processed_edges = []
+            if graph_repo.is_empty():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Graph not found for project {project_id}",
+                )
 
-        nodes = reference_graph.graph.get("nodes") or {}
-        edges = reference_graph.graph.get("edges") or []
-        if not nodes:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Graph not found for project {project_id}",
-            )
-
-        # Process all nodes (papers and authors)
-        for node in nodes.values():
-            node_id = node["paper_id"]
-            node_data = node["data"]
-            is_processed = node.get("processed", False)
-            
-            # Build node data
-            data = {
-                "id": node_id,
-                "title": node_data.get("title", ""),
-                "authors": node_data.get("authors", []),
-                "published": node_data.get("published", ""),
-                "is_processed": is_processed,
-                "refs_to": node.get("refs_to", []),
-                "refs_from": node.get("refs_from", []),
-                "node_type": node_data.get("node_type", "paper"),
-                "label": node_data.get("label", node_data.get("title", "")),
-            }
-
-            processed_nodes.append({
-                "data": data,
-            })
-
-        # Process all edges (citations and authorships)
-        for edge in edges:
-            edge_data = {
-                **edge,
-                "edge_type": edge.get("edge_type", "citation"),
-            }
-            processed_edges.append({
-                "data": edge_data,
-            })
-
-        graph_data["nodes"] = processed_nodes
-        graph_data["edges"] = processed_edges
+            graph_data = graph_repo.to_cytoscape()
 
         return {
             "status": "success",
