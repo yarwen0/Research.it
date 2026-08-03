@@ -6,6 +6,8 @@ a provider key during the test session.
 
 from __future__ import annotations
 
+import importlib
+
 import config
 from config import _maybe, _truthy, _int
 
@@ -37,6 +39,27 @@ class TestMaybe:
 def test_cors_origins_defaults_to_wildcard():
     # No CORS_ORIGINS set in the test environment.
     assert config.CORS_ORIGINS == ["*"]
+
+
+def test_wildcard_origins_disable_credentialed_cors():
+    # Wildcard origin + credentials is the combination Starlette resolves by
+    # echoing back any Origin, so credentials must be off here.
+    assert config.CORS_ORIGINS == ["*"]
+    assert config.CORS_ALLOW_CREDENTIALS is False
+
+
+def test_explicit_origins_allow_credentialed_cors(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com,https://example.com")
+    reloaded = importlib.reload(config)
+    try:
+        assert reloaded.CORS_ORIGINS == [
+            "https://app.example.com",
+            "https://example.com",
+        ]
+        assert reloaded.CORS_ALLOW_CREDENTIALS is True
+    finally:
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+        importlib.reload(config)
 
 
 class TestInt:
