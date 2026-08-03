@@ -54,6 +54,26 @@ CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 HOST = _maybe("HOST") or "0.0.0.0"
 PORT = _int("PORT", 8000)
 
+# --- Rate limiting ---------------------------------------------------------
+# A single /api/research call downloads dozens of PDFs and spends real LLM
+# budget, so the write endpoints are capped far tighter than the read ones.
+RATE_LIMIT_ENABLED = not _truthy(os.getenv("RATE_LIMIT_DISABLED"))
+
+# "memory://" is per-process and resets on restart — fine for one container,
+# but set this to a redis:// URI once more than one worker is serving traffic.
+RATE_LIMIT_STORAGE_URI = _maybe("RATE_LIMIT_STORAGE_URI") or "memory://"
+
+RATE_LIMIT_DEFAULT = _maybe("RATE_LIMIT_DEFAULT") or "120/minute"
+RATE_LIMIT_RESEARCH = _maybe("RATE_LIMIT_RESEARCH") or "5/hour"
+RATE_LIMIT_REVIEW = _maybe("RATE_LIMIT_REVIEW") or "10/hour"
+RATE_LIMIT_COMPILE = _maybe("RATE_LIMIT_COMPILE") or "30/minute"
+
+# Off by default: X-Forwarded-For is trivially spoofed unless something in
+# front of the app is guaranteed to overwrite it. Turn on when deployed behind
+# a proxy that does (Fly.io, most load balancers), or every client will share
+# the proxy's address and one caller can exhaust everyone's quota.
+TRUST_PROXY_HEADERS = _truthy(os.getenv("TRUST_PROXY_HEADERS"))
+
 if (LLM_PROVIDER or "").strip().lower() != "ollama" and not GEMINI_API_KEY and not OPENROUTER_API_KEY:
     raise RuntimeError(
         "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
