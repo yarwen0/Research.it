@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 import { StreamHandler, StreamHandlerCallbacks } from "./stream_handler";
 
 /** Build a Response whose body streams the given string chunks as SSE bytes. */
@@ -13,7 +13,16 @@ function sseResponse(chunks: string[]): Response {
   return new Response(stream);
 }
 
-function spies(): Required<StreamHandlerCallbacks> {
+/**
+ * Every callback, as a mock. Annotating with `Required<StreamHandlerCallbacks>`
+ * alone kept the completeness check but erased the mock types, so `.mock.calls`
+ * was not reachable from a test.
+ */
+type MockedCallbacks = {
+  [K in keyof Required<StreamHandlerCallbacks>]: Mock<Required<StreamHandlerCallbacks>[K]>;
+};
+
+function spies(): MockedCallbacks {
   return {
     onUpdate: vi.fn(),
     onProgress: vi.fn(),
