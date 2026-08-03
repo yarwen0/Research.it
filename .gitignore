@@ -23,3 +23,9 @@ out/
 
 # Cached generated artifacts
 cached_review.pdf
+
+# Playwright
+/fe-main/test-results/
+/fe-main/playwright-report/
+/fe-main/blob-report/
+/fe-main/.playwright/
