@@ -22,6 +22,28 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
 
+def _rank(gaps: List["Gap"]) -> List["Gap"]:
+    """Order gaps by score, breaking ties on identity rather than insertion.
+
+    Scores are a min() over three small counts, so ties are the norm rather
+    than the exception. Sorting on score alone left the winners decided by the
+    order candidates happened to come out of a set — which Python varies per
+    process — so the same corpus produced different gaps run to run.
+    """
+    return sorted(
+        gaps,
+        key=lambda g: (
+            -g.score,
+            g.gap_type,
+            g.problem or "",
+            g.method or "",
+            g.dataset or "",
+            g.limitation or "",
+            g.future_work_label or "",
+        ),
+    )
+
+
 def _unwrap_normalized_list(items: Iterable | None) -> List[str]:
     """Return only the normalized tokens from schema-conforming lists."""
 
@@ -177,7 +199,7 @@ class GapFinder:
         gaps: List[Gap] = []
         global_methods = set(self.method_global_counts)
         global_datasets = set(self.dataset_global_counts)
-        for problem, methods in self.methods_by_problem.items():
+        for problem, methods in sorted(self.methods_by_problem.items()):
             method_pool = set(methods)
             dataset_pool = set(self.datasets_by_problem.get(problem, set()))
             if self.loose_mode:
@@ -192,11 +214,11 @@ class GapFinder:
             if not method_pool or not dataset_pool:
                 continue
             original_datasets = self.datasets_by_problem.get(problem, set())
-            for dataset in dataset_pool:
+            for dataset in sorted(dataset_pool):
                 used_methods = self.methods_by_problem_dataset.get((problem, dataset), set())
                 skip_methods = used_methods if dataset in original_datasets else set()
                 candidate_methods = method_pool - skip_methods if skip_methods else method_pool
-                for method in candidate_methods:
+                for method in sorted(candidate_methods):
                     score = min(
                         self.count_problem.get(problem, 0),
                         self.count_problem_dataset.get((problem, dataset), 0),
@@ -218,8 +240,7 @@ class GapFinder:
                             metadata=metadata,
                         )
                     )
-        gaps.sort(key=lambda g: g.score, reverse=True)
-        return gaps[:top_k]
+        return _rank(gaps)[:top_k]
 
     def find_dataset_transfer_gaps(self, *, top_k: int = 5) -> List[Gap]:
         gaps: List[Gap] = []
@@ -240,11 +261,11 @@ class GapFinder:
             if not method_pool:
                 continue
             original_methods = self.methods_by_problem.get(problem, set())
-            for method in method_pool:
+            for method in sorted(method_pool):
                 used_datasets = self.datasets_by_problem_method.get((problem, method), set())
                 skip_datasets = used_datasets if method in original_methods else set()
                 candidate_datasets = dataset_pool - skip_datasets if skip_datasets else dataset_pool
-                for dataset in candidate_datasets:
+                for dataset in sorted(candidate_datasets):
                     score = min(
                         self.count_problem.get(problem, 0),
                         self.count_problem_method.get((problem, method), 0),
@@ -266,12 +287,11 @@ class GapFinder:
                             metadata=metadata,
                         )
                     )
-        gaps.sort(key=lambda g: g.score, reverse=True)
-        return gaps[:top_k]
+        return _rank(gaps)[:top_k]
 
     def find_limitation_gaps(self, *, top_k: int = 5) -> List[Gap]:
         gaps: List[Gap] = []
-        for (problem, limitation), count in self.limitations_by_problem.items():
+        for (problem, limitation), count in sorted(self.limitations_by_problem.items()):
             if count < self.limitation_pressure_threshold:
                 continue
             methods = self.methods_by_problem.get(problem, set())
@@ -283,7 +303,7 @@ class GapFinder:
             if self.loose_mode:
                 allowed_failures = max(1, len(methods) // 2 or 1)
             failures = 0
-            for method in methods:
+            for method in sorted(methods):
                 total = self.count_problem_method.get((problem, method), 0)
                 if total == 0:
                     continue
@@ -309,13 +329,12 @@ class GapFinder:
                         metadata=metadata,
                     )
                 )
-        gaps.sort(key=lambda g: g.score, reverse=True)
-        return gaps[:top_k]
+        return _rank(gaps)[:top_k]
 
     def find_future_work_gaps(self, *, top_k: int = 5) -> List[Gap]:
         problem_candidates: Dict[str, Dict[str, int]] = defaultdict(dict)
-        for problem, fw_counter in self.future_work_by_problem.items():
-            for fw_label, count in fw_counter.items():
+        for problem, fw_counter in sorted(self.future_work_by_problem.items()):
+            for fw_label, count in sorted(fw_counter.items()):
                 problem_candidates[fw_label][problem] = count
 
         gaps: List[Gap] = []
@@ -323,7 +342,7 @@ class GapFinder:
             label: self.method_global_counts.get(label, 0) + self.count_problem.get(label, 0)
             for label in self.future_work_counts
         }
-        for fw_label, count in self.future_work_counts.items():
+        for fw_label, count in sorted(self.future_work_counts.items()):
             if count < self.future_work_min_mentions:
                 continue
             realized = future_work_realized.get(fw_label, 0)
@@ -334,7 +353,8 @@ class GapFinder:
             demand_map = problem_candidates.get(fw_label)
             if not demand_map:
                 continue
-            top_problem = max(demand_map.items(), key=lambda item: item[1])[0]
+            # Tie-break on problem name so a shared maximum is stable.
+            top_problem = max(sorted(demand_map.items()), key=lambda item: item[1])[0]
             metadata = {
                 "requested_by_problems": demand_map,
                 "global_mentions": count,
@@ -348,8 +368,7 @@ class GapFinder:
                     metadata=metadata,
                 )
             )
-        gaps.sort(key=lambda g: g.score, reverse=True)
-        return gaps[:top_k]
+        return _rank(gaps)[:top_k]
 
     def find_all_gaps(self, *, top_k_per_type: int = 5) -> List[Gap]:
         results: List[Gap] = []
