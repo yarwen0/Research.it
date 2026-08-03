@@ -9,7 +9,7 @@
 #          --build-arg NEXT_PUBLIC_API_URL=https://api.example.com fe-main
 
 # ------------------------------------------------------------------ deps ---
-FROM node:20-slim AS deps
+FROM node:22-slim AS deps
 
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
@@ -21,7 +21,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # --------------------------------------------------------------- builder ---
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
@@ -40,7 +40,7 @@ COPY . .
 RUN pnpm build
 
 # --------------------------------------------------------------- runtime ---
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
