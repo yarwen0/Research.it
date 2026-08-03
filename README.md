@@ -60,13 +60,30 @@ Each subproject has its own README with details:
 | Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape   |
 | AI       | Gemini · OpenRouter · Ollama (local) — chat + embeddings                             |
 | Tooling  | pytest, Vitest, ESLint, GitHub Actions CI                                            |
+| Infra    | Docker, Docker Compose, Fly.io (API), Vercel (web)                                   |
 
 ## Quickstart
+
+### Docker (one command)
+
+```bash
+cp .env.example .env      # add a GEMINI_API_KEY — free at aistudio.google.com/apikey
+docker compose up --build
+```
+
+Frontend on <http://localhost:3000>, API docs on <http://localhost:8000/docs>.
+
+Don't want to sign up for a key? Set `LLM_PROVIDER=ollama` in `.env` and run
+`docker compose --profile local-llm up --build` to pull local models instead.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups (Fly.io + Vercel).
+
+### Native
 
 You need **Python 3.10+**, **Node 18+** with **pnpm**, and (optionally) a LaTeX
 toolchain (`pdflatex`, e.g. BasicTeX/TeX Live) for PDF review compilation.
 
-### 1. Backend
+#### 1. Backend
 
 ```bash
 cd be-main
@@ -77,7 +94,7 @@ cp .env.example .env          # then edit — see "LLM providers" below
 make dev                       # serves on http://127.0.0.1:8000
 ```
 
-### 2. Frontend
+#### 2. Frontend
 
 ```bash
 cd fe-main
