@@ -60,6 +60,13 @@ CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 HOST = _maybe("HOST") or "0.0.0.0"
 PORT = _int("PORT", 8000)
 
+# --- Logging ---------------------------------------------------------------
+LOG_LEVEL = (_maybe("LOG_LEVEL") or "INFO").upper()
+
+# JSON is queryable but unreadable at a terminal, so it is opt-in locally and
+# on by default wherever something is collecting logs.
+LOG_JSON = _truthy(os.getenv("LOG_JSON"))
+
 # --- Database --------------------------------------------------------------
 # SQLite keeps `git clone && make dev` working with no services to install;
 # compose and production point this at Postgres. The models and migrations are
