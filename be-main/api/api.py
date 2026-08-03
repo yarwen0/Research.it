@@ -27,6 +27,7 @@ from config import OPENROUTER_API_KEY, GEMINI_API_KEY
 from api.arxiv import ArxivClient, TopicGenerator, ArxivRateLimitError
 from api.review import ReviewManager
 from utils.graph import TrendsCreator
+from utils.paths import BASE_DIR, DATA_DIR, UnsafePathError, resolve_data_path
 from gap_finder import GapFinder, Paper
 
 # Configure logging
@@ -48,19 +49,21 @@ def save_processed_papers_to_json(all_processed_papers: list, user_prompt: str) 
         user_prompt: Original user prompt for filename
         
     Returns:
-        str: Path to the saved JSON file
+        str: Path to the saved JSON file, relative to the backend root. The
+            client echoes this back on /api/create_review, so it is kept
+            relative to stay stable across restarts and deploys.
     """
-    # Create data directory if it doesn't exist
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-    
+    # Anchored to the backend package so the path is stable no matter which
+    # working directory the server was started from.
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     # Create filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Clean user prompt for filename (remove special chars, limit length)
     clean_prompt = "".join(c if c.isalnum() or c in (' ', '_') else '_' for c in user_prompt)
     clean_prompt = clean_prompt.replace(' ', '_')[:50]  # Limit to 50 chars
     filename = f"processed_papers_{clean_prompt}_{timestamp}.json"
-    filepath = data_dir / filename
+    filepath = DATA_DIR / filename
     
     # Save to JSON
     with open(filepath, 'w', encoding='utf-8') as f:
@@ -72,7 +75,7 @@ def save_processed_papers_to_json(all_processed_papers: list, user_prompt: str) 
         }, f, indent=2, ensure_ascii=False)
     
     logger.info(f"Saved {len(all_processed_papers)} processed papers to {filepath}")
-    return str(filepath)
+    return str(filepath.relative_to(BASE_DIR))
 
 
 class StatusType(str, Enum):
@@ -114,6 +117,25 @@ class ReviewRequest(BaseModel):
     saved_filepath: str  # Path to the processed papers JSON file
     paper_index: int  # Index of the paper to review
     paper_info: dict  # Paper metadata (title, keywords, abstract)
+
+    @field_validator("saved_filepath")
+    @classmethod
+    def filepath_must_stay_in_data_dir(cls, v: str) -> str:
+        # The client echoes back a path it was handed earlier, so reject
+        # anything outside the data directory at the boundary — before the
+        # pipeline spins up — rather than at open() time.
+        try:
+            resolve_data_path(v)
+        except UnsafePathError as exc:
+            raise ValueError(str(exc)) from exc
+        return v
+
+    @field_validator("paper_index")
+    @classmethod
+    def paper_index_not_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("paper_index must not be negative")
+        return v
 
 
 class SSEUpdate(BaseModel):
