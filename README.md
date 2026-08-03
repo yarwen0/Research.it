@@ -54,13 +54,24 @@ Each subproject has its own README with details:
 
 ## Tech stack
 
-| Layer    | Technologies                                                                        |
-|----------|-------------------------------------------------------------------------------------|
-| Backend  | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX      |
-| Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape   |
-| AI       | Gemini · OpenRouter · Ollama (local) — chat + embeddings                             |
-| Tooling  | pytest, Vitest, ESLint, GitHub Actions CI                                            |
-| Infra    | Docker, Docker Compose, Fly.io (API), Vercel (web)                                   |
+| Layer     | Technologies                                                                       |
+|-----------|------------------------------------------------------------------------------------|
+| Backend   | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX     |
+| Data      | Postgres / SQLite, SQLAlchemy 2, Alembic                                            |
+| Frontend  | Next.js 14, React 18, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
+| AI        | Gemini · OpenRouter · Ollama (local) — chat + embeddings                            |
+| Observability | structlog (JSON logs), per-request correlation ids                             |
+| Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
+| Infra     | Docker, Docker Compose, Fly.io (API), Vercel (web)                                  |
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Request path, design decisions, known limits |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Compose, native and hosted setups |
+| [SECURITY.md](SECURITY.md) | Untrusted input surfaces and what constrains them |
+| [be-main/evals/README.md](be-main/evals/README.md) | Gap detection benchmark and results |
 
 ## Quickstart
 
@@ -128,29 +139,52 @@ See [`be-main/.env.example`](be-main/.env.example) for every option.
 
 ## API endpoints
 
-| Method | Path                        | Purpose                              |
-|--------|-----------------------------|--------------------------------------|
-| GET    | `/`                         | Health check                         |
-| GET    | `/health`                   | Detailed health check                |
-| POST   | `/api/research`             | Run the research pipeline (SSE)      |
-| POST   | `/api/create_review`        | Generate a literature review (SSE)   |
-| GET    | `/api/reviews`              | List generated reviews               |
-| GET    | `/api/reviews/{review_id}`  | Fetch one review                     |
-| POST   | `/api/latex/compile`        | Compile LaTeX to PDF                  |
-| GET    | `/api/graph/{project_id}/`  | Fetch a project's reference graph    |
+| Method | Path                          | Purpose                              |
+|--------|-------------------------------|--------------------------------------|
+| GET    | `/`                           | Health check                         |
+| GET    | `/health`                     | Detailed health check                |
+| POST   | `/api/research`               | Start a research run (SSE)           |
+| GET    | `/api/jobs/{job_id}`          | Status of a research job             |
+| GET    | `/api/jobs/{job_id}/events`   | Resume a run's stream (SSE)          |
+| POST   | `/api/create_review`          | Generate a literature review (SSE)   |
+| GET    | `/api/reviews`                | List generated reviews               |
+| GET    | `/api/reviews/{review_id}`    | Fetch one review                     |
+| POST   | `/api/latex/compile`          | Compile LaTeX to PDF                 |
+| GET    | `/api/graph/{project_id}/`    | Fetch a project's reference graph    |
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` once the
 backend is running.
 
+A run executes as a background job, so losing the connection stops the
+streaming, not the work. Every event carries a `job_id` and `sequence`;
+reconnect at `/api/jobs/{job_id}/events?after={sequence}` to pick up where it
+left off.
+
+The frontend's request and response types are generated from this schema
+(`pnpm generate:api-types`), and CI fails if the committed types drift from
+the backend.
+
 ## Tests
 
-Backend logic has a pytest suite (no network or API keys required):
+Everything below runs with no network access, no API keys and no LLM.
 
 ```bash
 cd be-main
 pip install -r requirements-dev.txt
-make test
+make test                       # pytest
+ruff check . && mypy            # lint and types
+python -m evals.run_eval        # gap detection metrics
 ```
+
+```bash
+cd fe-main
+pnpm test                       # Vitest unit tests
+pnpm typecheck                  # tsc
+pnpm test:e2e                   # Playwright, backend stubbed at the network layer
+```
+
+CI runs all of it, plus migrations against real Postgres and both Docker
+image builds.
 
 ## Does the gap finder actually work?
 
@@ -179,7 +213,8 @@ the finder under several `PYTHONHASHSEED` values.
 
 ## License
 
+[MIT](LICENSE).
+
 `be-main/utils/regex.py` is vendored from CERN's
 [refextract](https://github.com/inspirehep/refextract) and remains under its
-original GPL-2.0-or-later license (see the header in that file). No repository-wide
-license has been set for the rest of the project yet.
+original GPL-2.0-or-later license (see the header in that file).
