@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -10,6 +11,14 @@ from api.api import router as research_router
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
 from db.bootstrap import ensure_schema
 from rate_limit import limiter, rate_limit_handler
+
+
+# Configured once, at the entry point. A library module calling basicConfig
+# would silently depend on being imported before anything else logs.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 @asynccontextmanager

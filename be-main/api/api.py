@@ -1,103 +1,46 @@
-import json
+"""HTTP routes.
+
+Handlers here validate input, delegate to `services/`, and shape the response.
+Pipeline logic lives in the service layer so it is testable without a client
+and movable behind a job queue without touching these.
+"""
+
 import asyncio
 import logging
-from pathlib import Path
-from datetime import datetime
-from typing import AsyncGenerator, Optional, Any, List
-from enum import Enum
-import tempfile
 import os
-import uuid
+import tempfile
+from typing import AsyncGenerator, Optional, Any, List
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, field_validator
-from pylatex import Document, NoEscape
 
-from core import (
-    OpenRouterClient,
-    PDFExtractor,
-    ReferenceParameterExtractorFallback,
-    create_llm_client,
-)
-from db.repositories import GraphRepository, OntologyRepository, ProjectRepository
+from core import create_llm_client
+from db.repositories import GraphRepository
 from db.session import session_scope
 from config import (
-    OPENROUTER_API_KEY,
-    GEMINI_API_KEY,
     RATE_LIMIT_COMPILE,
     RATE_LIMIT_RESEARCH,
     RATE_LIMIT_REVIEW,
 )
 from rate_limit import limiter
-from api.arxiv import ArxivClient, TopicGenerator, ArxivRateLimitError
+from api.arxiv import ArxivClient
 from api.review import ReviewManager
-from utils.graph import TrendsCreator
+from core import ReferenceParameterExtractorFallback
+from services.events import StatusType
+from services.research_pipeline import ResearchPipeline
 from utils.latex import (
     MAX_LATEX_BYTES,
     LatexCompilationError,
     LatexUnavailableError,
     compile_latex_to_pdf,
 )
-from utils.paths import BASE_DIR, DATA_DIR, UnsafePathError, resolve_data_path
-from gap_finder import GapFinder, Paper
+from utils.paths import UnsafePathError, resolve_data_path
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def save_processed_papers_to_json(all_processed_papers: list, user_prompt: str) -> str:
-    """
-    Save all processed papers to a JSON file with timestamp.
-    
-    Args:
-        all_processed_papers: List of processed paper dictionaries
-        user_prompt: Original user prompt for filename
-        
-    Returns:
-        str: Path to the saved JSON file, relative to the backend root. The
-            client echoes this back on /api/create_review, so it is kept
-            relative to stay stable across restarts and deploys.
-    """
-    # Anchored to the backend package so the path is stable no matter which
-    # working directory the server was started from.
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Create filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Clean user prompt for filename (remove special chars, limit length)
-    clean_prompt = "".join(c if c.isalnum() or c in (' ', '_') else '_' for c in user_prompt)
-    clean_prompt = clean_prompt.replace(' ', '_')[:50]  # Limit to 50 chars
-    filename = f"processed_papers_{clean_prompt}_{timestamp}.json"
-    filepath = DATA_DIR / filename
-    
-    # Save to JSON
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump({
-            "user_prompt": user_prompt,
-            "timestamp": datetime.now().isoformat(),
-            "total_papers": len(all_processed_papers),
-            "papers": all_processed_papers
-        }, f, indent=2, ensure_ascii=False)
-    
-    logger.info(f"Saved {len(all_processed_papers)} processed papers to {filepath}")
-    return str(filepath.relative_to(BASE_DIR))
-
-
-class StatusType(str, Enum):
-    """Fixed status types for SSE updates"""
-    PROCESSING = "processing"  # Initial start, reading, initializing, extracting, normalizing, mapping
-    SUCCESS = "success"  # Completed successfully
-    ERROR = "error"  # Error occurred
-    PROGRESS = "progress"  # Intermediate progress updates with results
-    COMPLETED = "completed"  # Final completion with all results
 
 
 class ResearchRequest(BaseModel):
@@ -170,440 +113,30 @@ async def arxiv_research_stream(
     use_reranking: bool,
     broad_search_multiplier: int
 ) -> AsyncGenerator[str, None]:
+    """Adapt the research pipeline's progress events to the SSE wire format.
+
+    The pipeline itself is in services.research_pipeline and knows nothing
+    about HTTP, so moving it behind a job queue would replace this adapter
+    without touching it.
     """
-    Stream arXiv research extraction progress as SSE events.
-    
-    This function:
-    1. Uses provided topics or generates them via LLM when none are supplied
-    2. Searches arXiv for papers on each topic
-    3. Downloads and extracts text from papers
-    4. Processes each paper through the extraction pipeline
-    """
-    try:
-        logger.info(f"Starting arXiv research stream for prompt: '{user_prompt}'")
-        provided_topics = topics or []
-        logger.info(
-            "Parameters: provided_topics=%s, num_topics=%s, papers_per_topic=%s",
-            len(provided_topics),
-            num_topics,
-            papers_per_topic,
-        )
+    pipeline = ResearchPipeline(
+        user_prompt=user_prompt,
+        topics=topics,
+        num_topics=num_topics,
+        papers_per_topic=papers_per_topic,
+        use_reranking=use_reranking,
+        broad_search_multiplier=broad_search_multiplier,
+    )
 
-        project_id = uuid.uuid4().hex
-        
+    async for event in pipeline.run():
         yield SSEUpdate(
-            status=StatusType.PROCESSING,
-            message="Initializing arXiv research pipeline..."
+            status=event.status,
+            message=event.message,
+            result=event.result,
         ).to_sse()
+        # Hand control back so the frame is flushed rather than buffered
+        # behind the next stage's blocking work.
         await asyncio.sleep(0)
-        
-        # Initialize clients (auto-selects Gemini when GEMINI_API_KEY is set)
-        llm_client = create_llm_client()
-
-        extractor_fallback = ReferenceParameterExtractorFallback()
-
-        arxiv_client = ArxivClient(
-            max_results_per_topic=papers_per_topic,
-            reference_extractor_fallback=extractor_fallback,
-            openrouter_client=llm_client
-            )
-        topic_generator = TopicGenerator(llm_client)
-        extractor = PDFExtractor(llm_client=llm_client)
-
-        loop = asyncio.get_event_loop()
-
-        # The project row anchors every paper, author, edge and ontology term
-        # written below, so it has to exist before any of them.
-        with session_scope() as session:
-            ProjectRepository(session).create(project_id, user_prompt)
-        if provided_topics:
-            topics_to_process = provided_topics
-            yield SSEUpdate(
-                status=StatusType.PROGRESS,
-                message=f"Processing {len(topics_to_process)} provided topic(s)",
-                result={"topics": topics_to_process}
-            ).to_sse()
-            await asyncio.sleep(0)
-        else:
-            yield SSEUpdate(
-                status=StatusType.PROCESSING,
-                message=f"Generating {num_topics} related research topics..."
-            ).to_sse()
-            await asyncio.sleep(0)
-
-            generated_topics = await loop.run_in_executor(
-                None,
-                topic_generator.generate_related_topics,
-                user_prompt,
-                num_topics,
-            )
-
-            topics_to_process = generated_topics or [user_prompt]
-
-            yield SSEUpdate(
-                status=StatusType.PROGRESS,
-                message=f"Generated {len(topics_to_process)} topics",
-                result={"topics": topics_to_process}
-            ).to_sse()
-            await asyncio.sleep(0)
-        
-        # Process each topic
-        all_processed_papers = []
-        
-        for topic_idx, topic in enumerate(topics_to_process):
-            logger.info(
-                "Processing topic %s/%s: '%s'",
-                topic_idx + 1,
-                len(topics_to_process),
-                topic,
-            )
-            
-            yield SSEUpdate(
-                status=StatusType.PROCESSING,
-                message=f"Searching arXiv for topic {topic_idx + 1}/{len(topics_to_process)}: {topic}"
-            ).to_sse()
-            await asyncio.sleep(0)
-            
-            # Search and download papers
-            logger.debug(f"Searching and extracting papers for topic: '{topic}'")
-            
-            # Log reranking status
-            if use_reranking:
-                search_count = papers_per_topic * broad_search_multiplier
-                logger.info(
-                    f"Using vector-based reranking: searching {search_count} papers, "
-                    f"will rerank and select top {papers_per_topic}"
-                )
-            
-            try:
-                papers = await loop.run_in_executor(
-                    None,
-                    arxiv_client.search_and_extract_papers,
-                    topic,
-                    papers_per_topic,
-                    None,  # download_dir
-                    None,  # max_pages - extract all pages
-                    False,  # cleanup - keep downloaded PDFs
-                    1.0,   # delay_between_downloads
-                    None,  # progress_callback
-                    use_reranking,
-                    broad_search_multiplier
-                )
-            except ArxivRateLimitError as e:
-                # arXiv is throttling/unavailable; every topic will fail the same
-                # way, so report a clear error and stop instead of hanging.
-                logger.error(f"Aborting research run: {e}")
-                yield SSEUpdate(
-                    status=StatusType.ERROR,
-                    message=str(e)
-                ).to_sse()
-                await asyncio.sleep(0)
-                return
-
-            logger.info(f"Found and extracted {len(papers)} papers for topic: '{topic}'")
-            
-            yield SSEUpdate(
-                status=StatusType.PROGRESS,
-                message=f"Found {len(papers)} papers for topic: {topic}",
-                result={"topic": topic, "paper_count": len(papers)}
-            ).to_sse()
-            await asyncio.sleep(0)
-            
-            # Process each paper through the extraction pipeline
-            for paper_idx, paper_data in enumerate(papers):
-                try:
-                    paper_id = paper_data['paper_id']
-                    paper_title = paper_data['title']
-                    
-                    logger.info(f"Processing paper {paper_idx + 1}/{len(papers)} for topic '{topic}': {paper_title} (ID: {paper_id})")
-                    
-                    yield SSEUpdate(
-                        status=StatusType.PROCESSING,
-                        message=f"Processing paper {paper_idx + 1}/{len(papers)}: {paper_title[:50]}..."
-                    ).to_sse()
-                    await asyncio.sleep(0)
-                    
-                    # Extract parameters from paper text
-                    logger.debug(f"Extracting parameters from paper {paper_id}")
-                    extraction_result = await loop.run_in_executor(
-                        None, 
-                        extractor.extract_from_raw_text, 
-                        paper_data['text']
-                    )
-                    
-                    # Validate extraction result before parsing
-                    if not extraction_result or not extraction_result.strip():
-                        raise ValueError(f"Empty extraction result from LLM for paper {paper_id}")
-                    
-                    try:
-                        extraction_data = json.loads(extraction_result)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse extraction result for paper {paper_id}. Error: {e}")
-                        logger.error(f"Raw result (first 500 chars): {extraction_result[:500]}")
-                        raise ValueError(f"Invalid JSON in extraction result: {e}")
-                    
-                    logger.debug(f"Extraction complete for paper {paper_id}")
-                    
-                    # Normalize extracted parameters
-                    logger.debug(f"Normalizing parameters for paper {paper_id}")
-                    normalized_result = await loop.run_in_executor(
-                        None, 
-                        extractor.normalize_extracted_parameters, 
-                        extraction_data
-                    )
-                    
-                    # Validate normalization result before parsing
-                    if not normalized_result or not normalized_result.strip():
-                        raise ValueError(f"Empty normalization result from LLM for paper {paper_id}")
-                    
-                    try:
-                        normalized_data = json.loads(normalized_result)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse normalization result for paper {paper_id}. Error: {e}")
-                        logger.error(f"Raw result (first 500 chars): {normalized_result[:500]}")
-                        raise ValueError(f"Invalid JSON in normalization result: {e}")
-                    
-                    logger.debug(f"Normalization complete for paper {paper_id}")
-                    
-                    # Map to ontology
-                    logger.debug(f"Mapping to ontology for paper {paper_id}")
-                    paper_id = paper_data['paper_id']
-
-                    def map_ontology(normalized=normalized_data, pid=paper_id):
-                        # A short transaction per paper: a run holding one open
-                        # for its full duration would block every other writer.
-                        with session_scope() as session:
-                            OntologyRepository(session, project_id).map_paper(
-                                normalized, pid
-                            )
-
-                    await loop.run_in_executor(None, map_ontology)
-                    logger.debug(f"Ontology mapping complete for paper {paper_id}")
-                    
-                    processed_paper = {
-                        "paper_id": paper_id,
-                        "title": paper_data['title'],
-                        "authors": paper_data['authors'],
-                        "published": paper_data['published'],
-                        "pdf_url": paper_data['pdf_url'],
-                        "references": paper_data.get('references', []),
-                        "topic": topic,
-                        "extraction": extraction_data,
-                        "normalized": normalized_data
-                    }
-
-                    all_processed_papers.append(processed_paper)
-                    
-                    logger.info(f"Successfully processed paper {paper_id}: {paper_title}")
-                    
-                    yield SSEUpdate(
-                        status=StatusType.PROGRESS,
-                        message=f"Completed paper: {paper_data['title'][:50]}",
-                        result={"processed_paper": processed_paper}
-                    ).to_sse()
-                    await asyncio.sleep(0)
-                    
-                except Exception as e:
-                    error_msg = f"Error processing paper {paper_data.get('title', 'unknown')}: {str(e)}"
-                    logger.error(error_msg)
-                    yield SSEUpdate(
-                        status=StatusType.ERROR,
-                        message=error_msg
-                    ).to_sse()
-                    await asyncio.sleep(0)
-                    continue
-        
-        # Save all processed papers to JSON file
-        logger.info(f"Saving {len(all_processed_papers)} processed papers to JSON...")
-        saved_filepath = save_processed_papers_to_json(all_processed_papers, user_prompt)
-
-        yield SSEUpdate(
-            status=StatusType.PROCESSING,
-            message="Saving Graph..."
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        def persist_graph():
-            with session_scope() as session:
-                GraphRepository(session, project_id).build_from_processed_papers(
-                    all_processed_papers
-                )
-
-        # Hundreds of inserts for a full run — keep them off the event loop so
-        # concurrent SSE streams keep flowing.
-        await loop.run_in_executor(None, persist_graph)
-
-        yield SSEUpdate(
-            status=StatusType.PROCESSING,
-            message="Graph updated successfully."
-        ).to_sse()
-
-        yield SSEUpdate(
-            status=StatusType.PROCESSING,
-            message="Generating trend analyses and visualization data..."
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        logger.info("Generating trend analysis data...")
-        trends_data = {
-            "user_prompt": user_prompt,
-            "timestamp": datetime.now().isoformat(),
-            "total_papers": len(all_processed_papers),
-            "papers": all_processed_papers
-        }
-        
-        # TrendsCreator still consumes the nested ontology shape, so rebuild it
-        # from the rows this run contributed.
-        with session_scope() as session:
-            ontology = OntologyRepository(session, project_id).as_dict()
-
-        # Pass LLM client to TrendsCreator for dataset validation
-        trends_creator = TrendsCreator(trends_data, ontology, llm_client=llm_client)
-        trends = await loop.run_in_executor(None, trends_creator.create_all_trends)
-        
-        logger.info(f"Generated trend analysis with {len(trends)} chart types")
-        
-        yield SSEUpdate(
-            status=StatusType.PROGRESS,
-            message=f"Generated trend analyses for visualization",
-            result={"trends_generated": len(trends)}
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        # Generate dataset summary with validation and pie chart
-        logger.info("Generating comprehensive dataset summary with validation...")
-        dataset_summary = await loop.run_in_executor(None, trends_creator.get_dataset_summary)
-        logger.info(f"Generated dataset summary with {dataset_summary['total_unique_datasets']} validated unique datasets")
-        
-        yield SSEUpdate(
-            status=StatusType.PROGRESS,
-            message=f"Compiled dataset information for {dataset_summary['total_unique_datasets']} unique datasets",
-            result={"datasets_compiled": dataset_summary['total_unique_datasets']}
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        # Generate suggested papers using gap finder
-        yield SSEUpdate(
-            status=StatusType.PROCESSING,
-            message="Analyzing research gaps and generating paper suggestions..."
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        logger.info("Running gap analysis to generate suggested papers...")
-        
-        def generate_suggested_papers():
-            # Convert processed papers to Paper objects for gap finder
-            papers = []
-            for paper in all_processed_papers:
-                try:
-                    normalized = paper.get('normalized', {})
-                    paper_obj = Paper.from_canonical({
-                        "paper_id": paper.get('paper_id', ''),
-                        "problem": normalized.get('problem', ''),
-                        "methods": normalized.get('methods', []),
-                        "datasets": normalized.get('datasets', []),
-                        "limitations_implied": normalized.get('limitations_implied', []),
-                        "limitations_explicit": normalized.get('limitations_explicit', []),
-                        "future_work": normalized.get('future_work', [])
-                    })
-                    papers.append(paper_obj)
-                except Exception as e:
-                    logger.warning(f"Failed to convert paper {paper.get('paper_id', 'unknown')} for gap analysis: {e}")
-                    continue
-            
-            if not papers:
-                logger.warning("No papers available for gap analysis")
-                return []
-            
-            # Run gap finder with loose mode for better suggestions
-            gap_finder = GapFinder(
-                papers,
-                method_transfer_min_score=0,
-                dataset_transfer_min_score=0,
-                limitation_pressure_threshold=1,
-                limitation_ratio_threshold=0.5,
-                future_work_min_mentions=1,
-                loose_mode=True
-            )
-            
-            # Find all types of gaps (top 5 of each type for LLM processing)
-            gaps = gap_finder.find_all_gaps(top_k_per_type=5)
-            
-            if not gaps:
-                logger.warning("No research gaps found")
-                return []
-            
-            # Convert gaps to dict format for paper generator
-            gaps_dict = []
-            for gap in gaps:
-                gap_dict = {
-                    "gap_type": gap.gap_type,
-                    "problem": gap.problem,
-                    "score": gap.score,
-                    "method": gap.method,
-                    "dataset": gap.dataset,
-                    "limitation": gap.limitation,
-                    "future_work": gap.future_work_label
-                }
-                gaps_dict.append(gap_dict)
-            
-            # Use TopicGenerator to create paper suggestions from gaps
-            try:
-                suggested_papers = topic_generator.generate_paper_suggestions(
-                    gaps=gaps_dict,
-                    user_prompt=user_prompt,
-                    num_papers=min(10, len(gaps))
-                )
-                logger.info(f"Generated {len(suggested_papers)} paper suggestions")
-                return suggested_papers
-            except Exception as e:
-                logger.error(f"Failed to generate paper suggestions: {e}")
-                return []
-        
-        suggested_papers = await loop.run_in_executor(None, generate_suggested_papers)
-        
-        logger.info(f"Generated {len(suggested_papers)} paper suggestions from gap analysis")
-        
-        yield SSEUpdate(
-            status=StatusType.PROGRESS,
-            message=f"Generated {len(suggested_papers)} paper suggestions based on research gaps",
-            result={"suggested_papers_count": len(suggested_papers)}
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-        # Final summary
-        logger.info(
-            "arXiv research pipeline completed: %s papers processed across %s topics",
-            len(all_processed_papers),
-            len(topics_to_process),
-        )
-        
-        yield SSEUpdate(
-            status=StatusType.COMPLETED,
-            message=(
-                f"Research pipeline completed. Processed {len(all_processed_papers)} papers across "
-                f"{len(topics_to_process)} topics. Results saved to {saved_filepath}."
-            ),
-            result={
-                "user_prompt": user_prompt,
-                "topics": topics_to_process,
-                "total_papers": len(all_processed_papers),
-                "processed_papers": all_processed_papers,
-                "saved_filepath": saved_filepath,
-                "trends": trends,
-                "datasets": dataset_summary,
-                "suggested_papers": suggested_papers,
-                "project_id": project_id,
-            }
-        ).to_sse()
-        await asyncio.sleep(0)
-        
-    except Exception as e:
-        logger.error(f"Pipeline error: {str(e)}", exc_info=True)
-        yield SSEUpdate(
-            status=StatusType.ERROR,
-            message=f"Pipeline error: {str(e)}"
-        ).to_sse()
 
 
 @router.post("/research")
