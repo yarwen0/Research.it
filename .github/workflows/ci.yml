@@ -97,6 +97,35 @@ jobs:
         # Fails if a model was edited without generating a migration.
         run: alembic check
 
+  api-types:
+    name: Frontend types match the API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: be-main/requirements-dev.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: fe-main/pnpm-lock.yaml
+      - name: Install dependencies
+        run: |
+          pip install -r be-main/requirements-dev.txt
+          pnpm --dir fe-main install --frozen-lockfile
+      - name: Regenerate from the live schema
+        run: pnpm --dir fe-main generate:api-types
+      - name: Fail if the committed types are stale
+        # Catches a backend model change that never reached the frontend —
+        # otherwise the drift only shows up as a runtime shape mismatch.
+        run: git diff --exit-code -- fe-main/openapi.json fe-main/lib/api-types.ts
+
   evals:
     name: Gap detection quality
     runs-on: ubuntu-latest
