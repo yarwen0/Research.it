@@ -1,0 +1,78 @@
+# Research.it — full local stack.
+#
+#   cp .env.example .env      # add a GEMINI_API_KEY (or use the local-llm profile)
+#   docker compose up --build
+#
+# Frontend: http://localhost:3000   Backend: http://localhost:8000/docs
+#
+# To run with no API key at all, using local models instead:
+#   docker compose --profile local-llm up --build
+name: researchit
+
+services:
+  backend:
+    build:
+      context: ./be-main
+      args:
+        INSTALL_LATEX: ${INSTALL_LATEX:-true}
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_FOR_EMBEDDINGS: ${OPENROUTER_FOR_EMBEDDINGS:-}
+      # Inside the compose network Ollama is reachable by service name.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Generated papers, graphs and reviews survive container rebuilds.
+      - backend-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./fe-main
+      args:
+        # Baked in at build time — this is the URL the *browser* calls, so it
+        # must be the published host port, not the compose service name.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- optional: fully local, no API key ----------------------------------
+  # Enable with `docker compose --profile local-llm up` and set
+  # LLM_PROVIDER=ollama in your .env.
+  ollama:
+    profiles: ["local-llm"]
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  # One-shot: pulls the two models the backend expects, then exits.
+  ollama-pull:
+    profiles: ["local-llm"]
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "ollama pull ${OLLAMA_MODEL:-qwen2.5:7b} &&
+       ollama pull ${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
+    restart: "no"
+
+volumes:
+  backend-data:
+  ollama-models:
