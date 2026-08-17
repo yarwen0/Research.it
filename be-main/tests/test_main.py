@@ -41,6 +41,14 @@ def test_research_rejects_non_positive_num_topics():
     assert response.status_code == 422
 
 
+def test_research_rejects_non_positive_papers_per_topic():
+    response = client.post(
+        "/api/research",
+        json={"user_prompt": "machine learning", "num_topics": 2, "papers_per_topic": 0},
+    )
+    assert response.status_code == 422
+
+
 def test_graph_returns_404_for_unknown_project():
     response = client.get("/api/graph/nonexistent-project-id/")
     assert response.status_code == 404
