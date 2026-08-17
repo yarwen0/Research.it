@@ -6,6 +6,11 @@ dev:
 install:
 	pip install -r requirements-dev.txt
 
+.PHONY: lint
+lint:
+	ruff check .
+	mypy
+
 .PHONY: test
 test:
 	pytest
@@ -23,6 +28,7 @@ help:
 	@echo "Available commands:"
 	@echo "  make install      - Install runtime and dev dependencies"
 	@echo "  make dev          - Run the FastAPI server in development mode"
+	@echo "  make lint         - Run ruff and mypy"
 	@echo "  make test         - Run the pytest test suite"
 	@echo "  make docker-build - Build the backend container image"
 	@echo "  make docker-run   - Run the backend container on port 8000"
