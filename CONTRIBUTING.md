@@ -15,18 +15,23 @@ CI runs these on every push and pull request to `main`
 first:
 
 ```bash
-# Backend tests
+# Backend lint, types, and tests
 cd be-main
 pip install -r requirements-dev.txt
+make lint
 make test
 
-# Frontend lint + tests
+# Frontend typecheck, lint, tests, and production build
 cd ../fe-main
 pnpm install
+pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
 ```
+
+CI also runs Playwright (`pnpm test:e2e`), Alembic against Postgres, and
+Docker image builds — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## Conventions
 
