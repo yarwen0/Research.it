@@ -68,10 +68,30 @@ LOG_LEVEL = (_maybe("LOG_LEVEL") or "INFO").upper()
 LOG_JSON = _truthy(os.getenv("LOG_JSON"))
 
 # --- Database --------------------------------------------------------------
+
+
+def _normalize_database_url(url: str) -> str:
+    """Point a bare Postgres URL at the driver that is actually installed.
+
+    Every managed provider — Fly, Heroku, Render, Railway — hands out
+    `postgres://` or `postgresql://`. SQLAlchemy reads that as a request for
+    psycopg2, which is not a dependency here, and fails at connect time with a
+    misleading "No module named psycopg2". Only psycopg 3 is installed, so the
+    driver is made explicit rather than requiring every deployment to rewrite
+    the URL by hand.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 # SQLite keeps `git clone && make dev` working with no services to install;
 # compose and production point this at Postgres. The models and migrations are
 # the same either way, so the only difference is the URL.
-DATABASE_URL = _maybe("DATABASE_URL") or f"sqlite:///{_BASE_DIR / 'data' / 'researchit.db'}"
+DATABASE_URL = _normalize_database_url(
+    _maybe("DATABASE_URL") or f"sqlite:///{_BASE_DIR / 'data' / 'researchit.db'}"
+)
 
 # Pool sizing only applies to Postgres — SQLite ignores it.
 DB_POOL_SIZE = _int("DB_POOL_SIZE", 5)

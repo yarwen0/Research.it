@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 import config
 from config import _int, _maybe, _truthy
 
@@ -79,3 +81,38 @@ class TestInt:
 def test_host_and_port_defaults():
     assert config.HOST == "0.0.0.0"
     assert config.PORT == 8000
+
+
+class TestDatabaseUrlNormalization:
+    """Managed providers hand out `postgres://`, which SQLAlchemy maps to
+    psycopg2 — a driver this project does not install. Only psycopg 3 is
+    present, so the URL has to name it explicitly."""
+
+    @pytest.mark.parametrize(
+        "given",
+        [
+            "postgres://user:pw@host:5432/db",
+            "postgresql://user:pw@host:5432/db",
+        ],
+    )
+    def test_bare_postgres_urls_get_the_psycopg_driver(self, given):
+        normalized = config._normalize_database_url(given)
+        assert normalized.startswith("postgresql+psycopg://")
+        assert normalized.endswith("user:pw@host:5432/db")
+
+    def test_an_explicit_driver_is_left_alone(self):
+        url = "postgresql+psycopg://user:pw@host:5432/db"
+        assert config._normalize_database_url(url) == url
+
+    def test_sqlite_is_untouched(self):
+        url = "sqlite:////tmp/researchit.db"
+        assert config._normalize_database_url(url) == url
+
+    def test_credentials_containing_the_scheme_are_not_mangled(self):
+        # Only the leading scheme is rewritten, not an occurrence inside the
+        # password or database name.
+        url = "postgres://user:postgres://pw@host/db"
+        assert (
+            config._normalize_database_url(url)
+            == "postgresql+psycopg://user:postgres://pw@host/db"
+        )
