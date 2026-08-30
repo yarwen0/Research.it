@@ -24,7 +24,7 @@ start (~5 GB), then exits. Subsequent runs reuse the `ollama-models` volume.
 
 ## 2. Native
 
-See the [root README](README.md#quickstart). You need Python 3.10+, Node 18+
+See the [root README](README.md#quickstart). You need Python 3.10+, Node 20.9+
 with pnpm, and optionally a LaTeX toolchain.
 
 ## 3. Hosted (Fly.io + Vercel)
