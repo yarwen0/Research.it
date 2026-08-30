@@ -38,3 +38,8 @@ class TestReferencesSection:
         # "References" can appear in a table of contents as well as the real section.
         text = "References\n\nbody text\n\nBibliography\n[9] Z. Last. Final work. 2024."
         assert ArxivClient._references_section(text).startswith("[9] Z. Last.")
+
+    def test_accepts_numbered_and_uppercase_headings(self):
+        for heading in ("REFERENCES", "7. References", "Works Cited"):
+            text = f"body\n\n{heading}\n[1] Cited work. 2021."
+            assert ArxivClient._references_section(text) == "[1] Cited work. 2021."
