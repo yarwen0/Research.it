@@ -33,3 +33,8 @@ class TestReferencesSection:
         text = "Intro citing references in prose.\n\nReferences\n[1] A. Author. A paper. 2020."
         section = ArxivClient._references_section(text)
         assert section.startswith("[1] A. Author.")
+
+    def test_prefers_the_last_heading(self):
+        # "References" can appear in a table of contents as well as the real section.
+        text = "References\n\nbody text\n\nBibliography\n[9] Z. Last. Final work. 2024."
+        assert ArxivClient._references_section(text).startswith("[9] Z. Last.")
