@@ -41,6 +41,11 @@ LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama'; aut
 OLLAMA_BASE_URL = _maybe("OLLAMA_BASE_URL") or "http://localhost:11434"
 OLLAMA_MODEL = _maybe("OLLAMA_MODEL") or "qwen2.5:7b"
 OLLAMA_EMBED_MODEL = _maybe("OLLAMA_EMBED_MODEL") or "nomic-embed-text"
+# Ollama's own default is 4096 tokens. Extraction prompts carry paper text and
+# bibliographies, which overrun that: the prompt is silently truncated and
+# generation slows to a crawl once the window fills. Raising it costs memory,
+# so it stays configurable for smaller machines.
+OLLAMA_NUM_CTX = _int("OLLAMA_NUM_CTX", 8192)
 
 # When using Gemini chat, embeddings still default to Gemini. Set OPENROUTER_FOR_EMBEDDINGS=1
 # to route high-volume embeddings through OpenRouter instead (needs a paid / non-exhausted key).
