@@ -155,14 +155,23 @@ class ArxivClient:
     def _extract_references(self, text: str) -> list[dict[str, Any]]:
         """
         Extract references from paper text using LLM fallback.
-        
+
         Since extract_references_from_string() is a stub that returns empty list,
-        we directly use the LLM-based extractor to parse references from the full text.
+        we use the LLM-based extractor. It is given only the bibliography slice:
+        the full text is both unnecessary — references are all at the end — and
+        large enough to blow the request timeout on a local model, which loses
+        every reference for that paper.
         """
+        section = self._references_section(text)
+        if not section:
+            logger.info("No reference section found; skipping reference extraction")
+            return []
+
         try:
-            # Pass the full text to the LLM extractor
-            # It will identify and parse the references section
-            responses = self.reference_extractor_fallback.extract([text])
+            logger.info(
+                f"Extracting references from a {len(section)} char section (of {len(text)} chars)"
+            )
+            responses = self.reference_extractor_fallback.extract([section])
             processed_refs = []
             for response in responses.refs:
                 processed_refs.append(json.loads(response.model_dump_json()))
