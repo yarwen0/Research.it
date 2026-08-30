@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -43,6 +44,23 @@ class ArxivRateLimitError(RuntimeError):
 # Bounded so a rate-limited/slow arXiv surfaces an error in ~1-2 min instead of
 # hanging for many minutes. Worst case ≈ MAX_ATTEMPTS * backoff_cap.
 ARXIV_SEARCH_MAX_ATTEMPTS = 4
+
+# Reference extraction reads the bibliography, which sits at the end of a paper.
+# Sending the whole document instead costs a full-text prompt per paper and, on a
+# local model, reliably exceeds the request timeout — the call then returns
+# nothing and the citation graph loses every edge. These bound the slice sent.
+#
+# The cap is measured against the default local model (qwen2.5:7b via Ollama),
+# where the whole call — prompt plus the JSON it emits for every reference —
+# has to fit the context window and the 300 s timeout. A 6.2 KB section
+# finished in 107 s; 11.5 KB and 12.9 KB both ran past 300 s, so the cost grows
+# faster than the input. 8 KB keeps a comfortable margin. A long bibliography
+# is truncated rather than lost outright.
+REFERENCES_MAX_CHARS = 8_000
+_REFERENCE_HEADING = re.compile(
+    r"^\s*\*{0,2}(?:\d+\.?\s*)?(references|bibliography|works\s+cited|literature\s+cited)\*{0,2}\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _arxiv_transient_error(exc: BaseException) -> bool:
