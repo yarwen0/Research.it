@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Research.it frontend — Next.js 14 (App Router), standalone output.
+# Research.it frontend — Next.js 16 (App Router), standalone output.
 #
 # NEXT_PUBLIC_* values are inlined at build time, so the backend URL is a
 # build arg rather than a runtime env var.
