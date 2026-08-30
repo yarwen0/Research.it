@@ -181,7 +181,7 @@ Stated plainly, because a reviewer will find them anyway:
   the trade-off curve in [`evals/README.md`](be-main/evals/README.md).
 - **mypy runs against a subset.** Pre-refactor modules are silenced by name in
   `pyproject.toml`; the list is meant to shrink.
-- **24 React Compiler lint findings are warnings, not errors.** Enabled by the
+- **32 React Compiler lint findings are warnings, not errors.** Enabled by the
   Next 16 upgrade, mostly ref access during render and setState inside effects
   in the two graph renderers. Listed individually in `eslint.config.mjs`.
 
