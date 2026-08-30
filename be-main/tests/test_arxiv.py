@@ -1,6 +1,6 @@
 """Unit tests for arXiv client helpers (no network)."""
 
-from api.arxiv import _arxiv_transient_error
+from api.arxiv import ArxivClient, _arxiv_transient_error
 
 
 class TestArxivTransientError:
@@ -20,3 +20,16 @@ class TestArxivTransientError:
     def test_non_transient_errors(self):
         assert _arxiv_transient_error(Exception("404 Not Found")) is False
         assert _arxiv_transient_error(ValueError("invalid query")) is False
+
+
+class TestReferencesSection:
+    """The slice handed to the reference extractor.
+
+    Sending the whole paper instead used to exceed the LLM request timeout,
+    which returned no references at all and left the citation graph edgeless.
+    """
+
+    def test_starts_at_the_references_heading(self):
+        text = "Intro citing references in prose.\n\nReferences\n[1] A. Author. A paper. 2020."
+        section = ArxivClient._references_section(text)
+        assert section.startswith("[1] A. Author.")
