@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "generate:api-types": "cd ../be-main && python scripts/gen_openapi.py ../fe-main/openapi.json && cd ../fe-main && openapi-typescript openapi.json -o lib/api-types.ts"
+    "generate:api-types": "cd ../be-main && \"$(test -x .venv/bin/python && echo .venv/bin/python || echo python3)\" scripts/gen_openapi.py ../fe-main/openapi.json && cd ../fe-main && openapi-typescript openapi.json -o lib/api-types.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
