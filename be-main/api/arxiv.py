@@ -139,6 +139,19 @@ class ArxivClient:
         """Get a random user agent from the pool."""
         return random.choice(USER_AGENTS)
     
+    @staticmethod
+    def _references_section(text: str) -> str:
+        """Return the slice of `text` that plausibly holds the bibliography.
+
+        Prefers the text after the last "References"/"Bibliography" heading,
+        since a paper may cite the word earlier in prose. Falls back to the tail
+        of the document when no heading is found, and is capped either way so a
+        malformed paper cannot hand the model an unbounded prompt.
+        """
+        matches = list(_REFERENCE_HEADING.finditer(text))
+        section = text[matches[-1].end():] if matches else text[-REFERENCES_MAX_CHARS:]
+        return section[:REFERENCES_MAX_CHARS].strip()
+
     def _extract_references(self, text: str) -> list[dict[str, Any]]:
         """
         Extract references from paper text using LLM fallback.
