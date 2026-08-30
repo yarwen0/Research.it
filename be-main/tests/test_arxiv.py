@@ -53,3 +53,6 @@ class TestReferencesSection:
     def test_caps_an_oversized_section(self):
         text = "References\n" + "y" * (REFERENCES_MAX_CHARS * 3)
         assert len(ArxivClient._references_section(text)) <= REFERENCES_MAX_CHARS
+
+    def test_empty_text_yields_nothing(self):
+        assert ArxivClient._references_section("") == ""
