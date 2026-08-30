@@ -1,6 +1,6 @@
 """Unit tests for arXiv client helpers (no network)."""
 
-from api.arxiv import ArxivClient, _arxiv_transient_error
+from api.arxiv import REFERENCES_MAX_CHARS, ArxivClient, _arxiv_transient_error
 
 
 class TestArxivTransientError:
@@ -43,3 +43,9 @@ class TestReferencesSection:
         for heading in ("REFERENCES", "7. References", "Works Cited"):
             text = f"body\n\n{heading}\n[1] Cited work. 2021."
             assert ArxivClient._references_section(text) == "[1] Cited work. 2021."
+
+    def test_falls_back_to_the_tail_when_no_heading(self):
+        text = "x" * (REFERENCES_MAX_CHARS + 5_000) + "TAIL"
+        section = ArxivClient._references_section(text)
+        assert section.endswith("TAIL")
+        assert len(section) <= REFERENCES_MAX_CHARS
