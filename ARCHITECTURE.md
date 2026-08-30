@@ -7,7 +7,7 @@ deliberate.
 
 ```mermaid
 flowchart LR
-    B[Browser<br/>Next.js 14]
+    B[Browser<br/>Next.js 16]
 
     subgraph API["FastAPI"]
         R[Routes<br/>api/]
