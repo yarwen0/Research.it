@@ -18,6 +18,7 @@ from config import (
     OLLAMA_BASE_URL,
     OLLAMA_EMBED_MODEL,
     OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
     OPENROUTER_API_KEY,
     OPENROUTER_FOR_EMBEDDINGS,
     has_llm_provider,
@@ -325,7 +326,10 @@ class OllamaClient:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": 0.2},
+            # num_ctx defaults to 4096, which silently truncates a long prompt
+            # and makes generation crawl once the window is full. Extraction
+            # prompts (paper text, bibliographies) routinely exceed that.
+            "options": {"temperature": 0.2, "num_ctx": OLLAMA_NUM_CTX},
         }
         fmt = _to_ollama_format(response_format)
         if fmt is not None:
