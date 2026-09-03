@@ -50,12 +50,19 @@ ARXIV_SEARCH_MAX_ATTEMPTS = 4
 # local model, reliably exceeds the request timeout — the call then returns
 # nothing and the citation graph loses every edge. These bound the slice sent.
 #
-# The cap is measured against the default local model (qwen2.5:7b via Ollama),
-# where the whole call — prompt plus the JSON it emits for every reference —
-# has to fit the context window and the 300 s timeout. A 6.2 KB section
-# finished in 107 s; 11.5 KB and 12.9 KB both ran past 300 s, so the cost grows
-# faster than the input. 8 KB keeps a comfortable margin. A long bibliography
-# is truncated rather than lost outright.
+# The cap is measured, on both providers, and 8 KB is the value that holds on
+# each. The whole call — prompt plus the JSON emitted for every reference — has
+# to fit the model's context and the client timeout, and the cost grows faster
+# than the input because the output grows with the reference count.
+#
+#   Ollama (qwen2.5:7b, 300 s): 6.2 KB → 107 s; 11.5 KB and 12.9 KB both ran past
+#     300 s and returned nothing. At 8 KB: 27-34 refs in 136-218 s.
+#   Gemini (60 s): 8 KB → 34 refs in 6.4 s, but an 11.5 KB section timed out on
+#     three consecutive attempts at 60.1 s.
+#
+# So raising this for the faster hosted provider is not safe either — it fails
+# there too, just against a tighter timeout. A long bibliography is truncated
+# rather than lost outright.
 REFERENCES_MAX_CHARS = 8_000
 _REFERENCE_HEADING = re.compile(
     r"^\s*\*{0,2}(?:\d+\.?\s*)?(references|bibliography|works\s+cited|literature\s+cited)\*{0,2}\s*$",
