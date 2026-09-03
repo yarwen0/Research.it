@@ -22,6 +22,7 @@ from core import OpenRouterClient
 from db.repositories import ReviewRepository
 from db.session import session_scope
 from utils.embeddings import EmbeddingManager
+from utils.latex_review import normalize_review_latex
 from utils.paths import DATA_DIR, resolve_data_path
 
 logger = logging.getLogger(__name__)
@@ -694,10 +695,12 @@ Generate the complete LaTeX review now:"""
         # Step 6: Generate LaTeX review
         yield emit_progress("processing", "Generating comprehensive literature review...")
         
-        latex_review = self._generate_latex_review(
-            chunks=relevant_chunks,
-            topic=topic,
-            keywords=keywords
+        latex_review = normalize_review_latex(
+            self._generate_latex_review(
+                chunks=relevant_chunks,
+                topic=topic,
+                keywords=keywords,
+            )
         )
         
         # Step 7: Save review
