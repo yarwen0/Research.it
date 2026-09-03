@@ -125,6 +125,24 @@ coverage indices over the corpus. The LLM only phrases them as paper titles.
 This is what makes [`evals/`](be-main/evals/README.md) possible. Detection is
 inspectable and measurable; a prompt that "finds gaps" would be neither.
 
+### Generated LaTeX is repaired, not trusted
+
+The review prompt specifies a self-contained document: BibTeX entries in a
+`filecontents` block before `\documentclass`, `natbib`, and `plainnat`. A local
+qwen2.5:7b run ignored all three at once — `biblatex` instead of `natbib`, the
+`plain` style, and the entries dumped after `\end{document}` behind a
+`% references.bib` comment.
+
+Each is independently fatal. `biblatex.sty` is absent from a minimal TeX
+install, and nothing after `\end{document}` is ever read, so `references.bib`
+was never written and every `\cite` resolved to nothing even where the package
+did exist. The review endpoint produced documents its own compile endpoint
+rejected.
+
+[`utils/latex_review.py`](be-main/utils/latex_review.py) normalizes the output
+into the documented shape before it is stored. Prompt compliance is a quality
+signal; it is not something the compile step can depend on.
+
 ### Authors are scoped per project
 
 Author names in bibliographies are not reliable identity. A global author table
