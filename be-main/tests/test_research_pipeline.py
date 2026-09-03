@@ -82,6 +82,25 @@ class StubArxivClient:
         return self.papers_by_topic.get(topic, [])
 
 
+class ProgressReportingArxivClient(StubArxivClient):
+    """Fires the progress callback the way the real client does.
+
+    The plain stub ignores it, so without this the draining loop in
+    _process_topic would go uncovered.
+    """
+
+    def search_and_extract_papers(self, topic, *args):
+        self.calls.append(topic)
+        papers = self.papers_by_topic.get(topic, [])
+        # Located by type rather than position, so a change to the
+        # client's signature does not silently stop exercising this.
+        callback = next((a for a in args if callable(a)), None)
+        if callback:
+            for i, _ in enumerate(papers, start=1):
+                callback(i, len(papers))
+        return papers
+
+
 class StubTopicGenerator:
     def __init__(self, topics=None, suggestions=None):
         # `is None` rather than falsy: an empty list is a meaningful case
@@ -290,3 +309,36 @@ class TestErrorContainment:
         events = await _collect(pipeline(topic_generator=FailingGenerator()))
         assert events[-1].status == StatusType.COMPLETED
         assert events[-1].result["suggested_papers"] == []
+
+
+@pytest.mark.asyncio
+class TestFetchProgress:
+    """Progress during the slowest stage.
+
+    Search, download and extraction for a topic all happen inside one blocking
+    call — minutes per paper. It used to be given no progress callback, so the
+    stream went silent for the whole stage and the UI looked wedged.
+    """
+
+    async def test_emits_a_fetch_event_per_paper(self, pipeline):
+        papers = {"topic-a": [_arxiv_paper("2301.001", "A1"), _arxiv_paper("2301.002", "A2")], "topic-b": []}
+        p = pipeline(arxiv_client=ProgressReportingArxivClient(papers))
+        events = await _collect(p)
+        fetched = [e for e in events if "Fetched" in e.message]
+        assert [e.result["fetched"] for e in fetched] == [1, 2]
+        assert all(e.result["total"] == 2 for e in fetched)
+
+    async def test_fetch_events_precede_the_papers_found_event(self, pipeline):
+        papers = {"topic-a": [_arxiv_paper("2301.001", "A1")], "topic-b": []}
+        p = pipeline(arxiv_client=ProgressReportingArxivClient(papers))
+        events = await _collect(p)
+        messages = [e.message for e in events]
+        first_fetch = next(i for i, m in enumerate(messages) if "Fetched" in m)
+        found = next(i for i, m in enumerate(messages) if m.startswith("Found "))
+        assert first_fetch < found
+
+    async def test_run_still_completes(self, pipeline):
+        papers = {"topic-a": [_arxiv_paper("2301.001", "A1")], "topic-b": []}
+        p = pipeline(arxiv_client=ProgressReportingArxivClient(papers))
+        events = await _collect(p)
+        assert events[-1].status == StatusType.COMPLETED
