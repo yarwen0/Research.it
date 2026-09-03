@@ -10,8 +10,10 @@ endpoint is a translation layer and nothing here knows about HTTP.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
+import queue
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -27,6 +29,17 @@ from services.events import PipelineEvent, completed, error, processing, progres
 from utils.graph import TrendsCreator
 
 logger = logging.getLogger(__name__)
+
+# How often the topic stage checks its worker thread for new progress. Short
+# enough that the UI keeps moving, long enough not to spin the event loop.
+_PROGRESS_POLL_SECONDS = 0.25
+
+
+def _fetch_progress(topic: str, done: int, total: int) -> PipelineEvent:
+    return progress(
+        f"Fetched {done}/{total} papers for topic: {topic}",
+        {"topic": topic, "fetched": done, "total": total},
+    )
 
 
 class ResearchPipeline:
@@ -169,18 +182,44 @@ class ResearchPipeline:
                 self.papers_per_topic,
             )
 
-        papers = await self._run_blocking(
-            self.arxiv_client.search_and_extract_papers,
-            topic,
-            self.papers_per_topic,
-            None,  # download_dir
-            None,  # max_pages — extract all
-            False,  # cleanup — keep downloaded PDFs
-            1.0,  # delay_between_downloads
-            None,  # progress_callback
-            self.use_reranking,
-            self.broad_search_multiplier,
+        # Searching, downloading and extracting every paper for a topic happens
+        # inside one blocking call, and it is by far the slowest stretch of a
+        # run — minutes per paper once reference extraction is counted. The
+        # callback is drained as it fires so the stream keeps moving; passing
+        # None here left the UI silent for the whole stage and looking wedged.
+        updates: queue.Queue[tuple[int, int]] = queue.Queue()
+        search = asyncio.get_event_loop().run_in_executor(
+            None,
+            functools.partial(
+                self.arxiv_client.search_and_extract_papers,
+                topic,
+                self.papers_per_topic,
+                None,  # download_dir
+                None,  # max_pages — extract all
+                False,  # cleanup — keep downloaded PDFs
+                1.0,  # delay_between_downloads
+                lambda done, total: updates.put((done, total)),
+                self.use_reranking,
+                self.broad_search_multiplier,
+            ),
         )
+
+        while not search.done():
+            try:
+                done, total = updates.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(_PROGRESS_POLL_SECONDS)
+                continue
+            yield _fetch_progress(topic, done, total)
+
+        # Re-raises whatever the worker raised, so the caller still sees
+        # ArxivRateLimitError and friends.
+        papers = await search
+
+        # Anything queued between the final poll and the call returning.
+        while not updates.empty():
+            done, total = updates.get_nowait()
+            yield _fetch_progress(topic, done, total)
 
         logger.info("Found and extracted %s papers for topic '%s'", len(papers), topic)
         yield progress(
