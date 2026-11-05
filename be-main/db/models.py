@@ -178,6 +178,10 @@ class Chunk(Base):
         ),
         # Every search is scoped to one project and one model.
         Index("ix_chunks_project_model", "project_id", "embedding_model"),
+        # Ids are never reused, on SQLite as on Postgres, so (count, highest
+        # id) changes whenever chunks do — the cache key for lexical indexes.
+        # Without it SQLite hands a replaced chunk its predecessor's id.
+        {"sqlite_autoincrement": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

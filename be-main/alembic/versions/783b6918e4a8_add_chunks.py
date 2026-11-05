@@ -46,7 +46,9 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['paper_id'], ['papers.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('paper_id', 'embedding_model', 'kind', 'ordinal', name='uq_chunks_position')
+    sa.UniqueConstraint('paper_id', 'embedding_model', 'kind', 'ordinal', name='uq_chunks_position'),
+    # Never reuse an id on SQLite either; see the Chunk model.
+    sqlite_autoincrement=True,
     )
     with op.batch_alter_table('chunks', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_chunks_paper_id'), ['paper_id'], unique=False)
