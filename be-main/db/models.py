@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, ClassVar
 
+import numpy as np
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -36,6 +37,8 @@ from sqlalchemy import (
     Enum as SAEnum,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from db.types import EmbeddingVector
 
 
 def _utcnow() -> datetime:
@@ -143,9 +146,61 @@ class Paper(Base):
         foreign_keys="Citation.target_paper_id",
         cascade="all, delete-orphan",
     )
+    # Left to the database's ON DELETE CASCADE rather than loaded and deleted
+    # one by one: a paper can have hundreds of chunks.
+    chunks: Mapped[list[Chunk]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<Paper {self.external_id} {self.title[:32]!r}>"
+
+
+class Chunk(Base):
+    """A retrievable passage of a processed paper, with its embedding.
+
+    Two kinds share the table. ``text`` chunks are slices of a paper's full
+    text — unstructured, labelled with the section they came from, with the
+    bibliography left out. One ``profile`` chunk per paper renders its
+    structured extraction (problem, methods, datasets, limitations, future
+    work) as prose, so a question about what a paper *is* can match the
+    paper's record instead of whichever passage happens to mention the term.
+
+    Rows are keyed by embedding model as well as position. Vectors from two
+    models are not comparable, so a corpus re-indexed under a new model sits
+    alongside the old one rather than mixing with it.
+    """
+
+    __tablename__ = "chunks"
+    __table_args__ = (
+        UniqueConstraint(
+            "paper_id", "embedding_model", "kind", "ordinal", name="uq_chunks_position"
+        ),
+        # Every search is scoped to one project and one model.
+        Index("ix_chunks_project_model", "project_id", "embedding_model"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    paper_id: Mapped[int] = mapped_column(
+        ForeignKey("papers.id", ondelete="CASCADE"), index=True
+    )
+
+    kind: Mapped[str] = mapped_column(String(16))  # "text" | "profile"
+    ordinal: Mapped[int] = mapped_column(Integer)
+    section: Mapped[str | None] = mapped_column(String(255), default=None)
+    text: Mapped[str] = mapped_column(Text)
+
+    embedding_model: Mapped[str] = mapped_column(String(255))
+    embedding: Mapped[np.ndarray] = mapped_column(EmbeddingVector())
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    paper: Mapped[Paper] = relationship(back_populates="chunks")
 
 
 class Author(Base):
