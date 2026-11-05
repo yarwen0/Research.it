@@ -18,6 +18,7 @@ from services.rag import (
     CorpusQA,
     NotIndexedError,
     Source,
+    collect_citations,
     parse_answer,
     render_sources,
     validate_citations,
@@ -124,6 +125,25 @@ class TestParseAnswer:
         assert parse_answer("Plain text, no JSON.") == ("Plain text, no JSON.", False, [])
 
 
+class TestCollectCitations:
+    def test_a_citation_only_listed_still_counts(self):
+        # The case that made the field required: a right answer, no marker.
+        text, cited, dropped = collect_citations("Training takes 3 days.", ["S2"], {"S1", "S2"})
+        assert (text, cited, dropped) == ("Training takes 3 days.", ["S2"], [])
+
+    def test_inline_citations_come_first_and_count_once(self):
+        _, cited, _ = collect_citations("Rmsprop [S3].", ["S1", "S3"], {"S1", "S3"})
+        assert cited == ["S3", "S1"]
+
+    def test_a_bare_number_means_that_source(self):
+        _, cited, _ = collect_citations("Done.", ["2", "[S1]"], {"S1", "S2"})
+        assert cited == ["S2", "S1"]
+
+    def test_listed_ids_that_do_not_exist_are_dropped(self):
+        _, cited, dropped = collect_citations("Done [S9].", ["S9", "S7"], {"S1"})
+        assert (cited, dropped) == ([], ["S9", "S7"])
+
+
 def _source(source_id, text, title="A Paper", section="3 Method"):
     return Source(
         source_id, RetrievedChunk(1, "p", title, "text", section, text, 0.5, 1, None)
@@ -179,6 +199,20 @@ class TestCorpusQA:
         assert result.insufficient_evidence
         assert result.grounded
         assert result.cited == []
+
+    def test_citations_only_listed_ground_the_answer(self):
+        project_id = _indexed_project()
+        qa, _ = _qa(json.dumps({"answer": "It uses rmsprop.", "citations": ["S1"], "insufficient_evidence": False}))
+        result = qa.answer(project_id, "Which optimizer?")
+        assert result.grounded
+        assert result.cited == ["S1"]
+
+    def test_the_schema_requires_citations(self):
+        project_id = _indexed_project()
+        qa, client = _qa(_reply("Answer [S1]."))
+        qa.answer(project_id, "learning rate")
+        schema = client.requests[0][1]["json_schema"]["schema"]
+        assert "citations" in schema["required"]
 
     def test_an_uncited_answer_is_marked_ungrounded(self):
         project_id = _indexed_project()
