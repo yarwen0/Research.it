@@ -105,17 +105,23 @@ class TestValidateCitations:
 
 class TestParseAnswer:
     def test_reads_the_structured_reply(self):
-        assert parse_answer(_reply("It uses rmsprop [S1].")) == ("It uses rmsprop [S1].", False)
+        assert parse_answer(_reply("It uses rmsprop [S1].")) == ("It uses rmsprop [S1].", False, [])
 
     def test_reads_a_refusal(self):
-        assert parse_answer(_reply("The sources do not say.", True)) == ("The sources do not say.", True)
+        assert parse_answer(_reply("The sources do not say.", True)) == (
+            "The sources do not say.", True, []
+        )
+
+    def test_reads_the_listed_citations(self):
+        raw = json.dumps({"answer": "3 days.", "citations": ["S2", 4], "insufficient_evidence": False})
+        assert parse_answer(raw) == ("3 days.", False, ["S2", "4"])
 
     def test_finds_json_wrapped_in_prose(self):
         raw = 'Here you go:\n{"answer": "Yes [S1].", "insufficient_evidence": false}\nThanks'
-        assert parse_answer(raw) == ("Yes [S1].", False)
+        assert parse_answer(raw) == ("Yes [S1].", False, [])
 
     def test_falls_back_to_the_raw_text(self):
-        assert parse_answer("Plain text, no JSON.") == ("Plain text, no JSON.", False)
+        assert parse_answer("Plain text, no JSON.") == ("Plain text, no JSON.", False, [])
 
 
 def _source(source_id, text, title="A Paper", section="3 Method"):
