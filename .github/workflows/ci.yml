@@ -57,14 +57,15 @@ jobs:
         run: pytest --cov --cov-report=term-missing --cov-fail-under=50
 
   backend-postgres:
-    name: Backend schema (Postgres)
+    name: Backend schema and vector search (Postgres)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: be-main
     services:
       postgres:
-        image: postgres:16-alpine
+        # Postgres with pgvector, which the chunks migration enables.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: researchit
           POSTGRES_PASSWORD: researchit
@@ -96,6 +97,16 @@ jobs:
       - name: Check migrations match the models
         # Fails if a model was edited without generating a migration.
         run: alembic check
+      - name: Vector search against pgvector
+        # The pgvector query path runs only on Postgres, so the SQLite test
+        # job never reaches it. These tests drop what they create, hence a
+        # database of their own.
+        env:
+          PGPASSWORD: researchit
+          TEST_POSTGRES_URL: postgresql+psycopg://researchit:researchit@localhost:5432/researchit_test
+        run: |
+          psql -h localhost -U researchit -d researchit -c "CREATE DATABASE researchit_test"
+          pytest tests/test_chunk_store.py -k postgres
 
   api-types:
     name: Frontend types match the API
