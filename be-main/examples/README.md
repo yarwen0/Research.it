@@ -18,6 +18,7 @@ run from there, so their relative paths into this folder resolve.
 | `gap_find_example.py` | Runs the symbolic gap finder over `sample_corpus.json` and prints detected gaps and title conditions. | Not needed |
 | `extractor_example.py` | Extracts and normalizes parameters from a document in `docs/`. | Yes (OpenRouter) |
 | `reference_extract_example.py` | Parses references from a citation string via the LLM fallback extractor. | Yes (Gemini) |
+| `examples/adk_agent.py` | A Google ADK agent answering questions with Research.it's MCP tools; runs in its own environment (see its docstring). | Gemini, or Ollama via LiteLLM |
 
 ## Running
 
