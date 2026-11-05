@@ -73,5 +73,31 @@ and for the assistant's writer, merged with any inline markers and validated
 the same way. Constrained decoding can enforce a field; it cannot enforce a
 convention in prose.
 
-**That change has not been re-measured.** The table above is the run before
-it. Running the command again shows whether grounded and supported moved.
+## After the change
+
+The same questions and model, run twice after citations became required.
+Both runs gave identical rates; [`results.json`](results.json) holds the
+second.
+
+| | Before | After |
+|---|---:|---:|
+| Answerable: states the expected fact | 0.833 (15/18) | **0.889** (16/18) |
+| Answerable: a cited passage holds the evidence | 0.278 (5/18) | **0.889** (16/18) |
+| Answerable: declined although answerable | 0.056 (1/18) | 0 (0/18) |
+| Unanswerable: declined | 1.000 (8/8) | 1.000 (8/8) |
+| Grounded: cites a supplied source, or declines | 0.615 (16/26) | **1.000** (26/26) |
+| Citations of sources never supplied | 0 | 0 |
+
+A jump that size needs checking: an answer that cites all eight passages it
+was given is "supported" whatever it says. So the benchmark now records how
+widely each answer cites. Answers cited **1.38 of 8 passages on average, and
+none cited all eight**. Answerable questions cited one passage (9), two (7)
+or four (2). The gain is real, not a model citing everything.
+
+The two remaining misses are the two that start upstream of the model: the
+passage retrieval does not rank, and the step count read off a table. The
+answer that declined over a garbled table now answers it.
+
+Latency is not compared. The same machine gave a p50 of 12.1 s on the first
+run after the change and 3.9 s on the second, which says more about the
+laptop than the pipeline.
