@@ -15,7 +15,14 @@ from db.models import Job, JobStatus
 from db.repositories import ProjectRepository
 from db.session import session_scope
 from services import jobs as jobs_module
-from services.events import PipelineEvent, StatusType, completed, processing, progress
+from services.events import (
+    PipelineEvent,
+    StatusType,
+    completed,
+    error,
+    processing,
+    progress,
+)
 from services.jobs import (
     JobNotFoundError,
     create_job,
@@ -106,6 +113,15 @@ class TestJobLifecycle:
             processing("Starting"),
             PipelineEvent(StatusType.ERROR, "Pipeline error: arXiv unreachable"),
         ]
+        job_id = create_job("prompt", {})
+        await run_job(job_id, FakePipeline(events))
+
+        assert get_job(job_id)["status"] == JobStatus.FAILED.value
+
+    async def test_an_error_marked_fatal_fails_the_job(self):
+        # An aborted run (arXiv throttling, say) is a failure even though
+        # its message is not a "Pipeline error".
+        events = [processing("Starting"), error("arXiv is throttling requests", fatal=True)]
         job_id = create_job("prompt", {})
         await run_job(job_id, FakePipeline(events))
 
