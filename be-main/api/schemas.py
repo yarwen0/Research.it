@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from services.events import StatusType
 
@@ -119,6 +119,90 @@ class JobMetricsResponse(BaseModel):
     totals: UsageSummary
     by_stage: list[StageUsage] = Field(default_factory=list)
     by_model: list[ModelUsage] = Field(default_factory=list)
+
+
+class SearchHit(BaseModel):
+    """A retrieved passage and where it came from."""
+
+    chunk_id: int
+    paper_id: str = Field(description="The paper's external id, e.g. its arXiv id.")
+    paper_title: str
+    section: str | None = None
+    kind: Literal["text", "profile"] = Field(
+        description="A slice of the paper's text, or its structured record rendered as prose."
+    )
+    text: str
+    score: float = Field(
+        description="Fused RRF score in hybrid mode; cosine similarity or BM25 otherwise."
+    )
+    dense_rank: int | None = Field(default=None, description="1-based rank in the dense list.")
+    lexical_rank: int | None = Field(default=None, description="1-based rank in the BM25 list.")
+
+
+class SearchResponse(BaseModel):
+    project_id: str
+    query: str
+    strategy: Literal["hybrid", "dense", "lexical"]
+    embedding_model: str
+    hits: list[SearchHit] = Field(default_factory=list)
+
+
+class IndexStatusResponse(BaseModel):
+    """Whether a project can be searched with the configured embedding model."""
+
+    project_id: str
+    embedding_model: str = Field(description="The embedding model this server is configured with.")
+    indexed_chunks: int = Field(description="Passages indexed with that model.")
+    ready: bool
+    models: dict[str, int] = Field(
+        default_factory=dict, description="Passages per embedding model the project was indexed with."
+    )
+
+
+class AskRequest(BaseModel):
+    """A question about a project's papers."""
+
+    question: str = Field(min_length=1, max_length=1000)
+    k: int = Field(default=8, ge=1, le=20, description="Passages to answer from.")
+
+    @field_validator("question")
+    @classmethod
+    def question_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("question must not be empty")
+        return stripped
+
+
+class AnswerSource(SearchHit):
+    """A passage the answer was allowed to cite."""
+
+    id: str = Field(description="The id the answer cites it by, e.g. S1.")
+    cited: bool
+
+
+class AskResponse(BaseModel):
+    """A grounded answer and the evidence behind it."""
+
+    project_id: str
+    question: str
+    answer: str = Field(description="Cites sources inline as [S1], [S2].")
+    insufficient_evidence: bool = Field(
+        description="The model found no answer in the sources and said so."
+    )
+    grounded: bool = Field(
+        description="Declined, or cited at least one real source. False means do not trust it."
+    )
+    sources: list[AnswerSource] = Field(default_factory=list)
+    cited: list[str] = Field(default_factory=list)
+    dropped_citations: list[str] = Field(
+        default_factory=list,
+        description="Citations of sources the model was never given, removed from the answer.",
+    )
+    strategy: str
+    embedding_model: str
+    usage: UsageSummary
+    latency_ms: float
 
 
 class GraphNodeData(BaseModel):

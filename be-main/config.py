@@ -134,6 +134,9 @@ RATE_LIMIT_DEFAULT = _maybe("RATE_LIMIT_DEFAULT") or "120/minute"
 RATE_LIMIT_RESEARCH = _maybe("RATE_LIMIT_RESEARCH") or "5/hour"
 RATE_LIMIT_REVIEW = _maybe("RATE_LIMIT_REVIEW") or "10/hour"
 RATE_LIMIT_COMPILE = _maybe("RATE_LIMIT_COMPILE") or "30/minute"
+# One answer is a query embedding plus one LLM call: far cheaper than a run,
+# but still real spend.
+RATE_LIMIT_ASK = _maybe("RATE_LIMIT_ASK") or "60/hour"
 
 # Off by default: X-Forwarded-For is trivially spoofed unless something in
 # front of the app is guaranteed to overwrite it. Turn on when deployed behind
