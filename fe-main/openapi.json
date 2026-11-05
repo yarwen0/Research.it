@@ -89,6 +89,49 @@
         }
       }
     },
+    "/api/jobs/{job_id}/metrics": {
+      "get": {
+        "tags": [
+          "research"
+        ],
+        "summary": "Get Job Metrics Endpoint",
+        "description": "LLM usage for a research job: tokens, latency, throughput, cost.\n\nBroken down by pipeline stage and by model, so the slow stage and the\nexpensive model are both visible. Readable while the job is running.\nCosts are estimates at list prices; see `prices_checked` for their date.",
+        "operationId": "get_job_metrics_endpoint_api_jobs__job_id__metrics_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobMetricsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/{job_id}/events": {
       "get": {
         "tags": [
@@ -633,6 +676,55 @@
         "title": "HealthResponse",
         "description": "Liveness check."
       },
+      "JobMetricsResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "prices_checked": {
+            "type": "string",
+            "title": "Prices Checked",
+            "description": "Date the price table behind cost_usd was last checked."
+          },
+          "totals": {
+            "$ref": "#/components/schemas/UsageSummary"
+          },
+          "by_stage": {
+            "items": {
+              "$ref": "#/components/schemas/StageUsage"
+            },
+            "type": "array",
+            "title": "By Stage"
+          },
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/ModelUsage"
+            },
+            "type": "array",
+            "title": "By Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "prices_checked",
+          "totals"
+        ],
+        "title": "JobMetricsResponse",
+        "description": "What a research job's LLM calls cost, overall and broken down."
+      },
       "JobResponse": {
         "properties": {
           "job_id": {
@@ -720,6 +812,123 @@
         ],
         "title": "LatexCompileRequest",
         "description": "Model for LaTeX compilation request"
+      },
+      "ModelUsage": {
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "estimated_calls": {
+            "type": "integer",
+            "title": "Estimated Calls",
+            "description": "Calls whose token counts were estimated from text length because the provider reported none."
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd",
+            "description": "Estimated cost of the priced calls, in USD, at list prices."
+          },
+          "unpriced_calls": {
+            "type": "integer",
+            "title": "Unpriced Calls",
+            "description": "Calls to models missing from the price table; not in cost_usd."
+          },
+          "latency_ms_total": {
+            "type": "number",
+            "title": "Latency Ms Total"
+          },
+          "latency_ms_p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P50"
+          },
+          "latency_ms_p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P95"
+          },
+          "output_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens Per Second",
+            "description": "End to end: output tokens over request latency, chat calls only."
+          },
+          "decode_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decode Tokens Per Second",
+            "description": "Output tokens over the model's own generation time, for providers that report it (Ollama)."
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "chat",
+              "embeddings"
+            ],
+            "title": "Operation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calls",
+          "errors",
+          "input_tokens",
+          "output_tokens",
+          "estimated_calls",
+          "cost_usd",
+          "unpriced_calls",
+          "latency_ms_total",
+          "provider",
+          "model",
+          "operation"
+        ],
+        "title": "ModelUsage",
+        "description": "Usage for one model and operation."
       },
       "ResearchRequest": {
         "properties": {
@@ -873,6 +1082,207 @@
         ],
         "title": "ReviewSummary",
         "description": "One entry in the review list."
+      },
+      "StageUsage": {
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "estimated_calls": {
+            "type": "integer",
+            "title": "Estimated Calls",
+            "description": "Calls whose token counts were estimated from text length because the provider reported none."
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd",
+            "description": "Estimated cost of the priced calls, in USD, at list prices."
+          },
+          "unpriced_calls": {
+            "type": "integer",
+            "title": "Unpriced Calls",
+            "description": "Calls to models missing from the price table; not in cost_usd."
+          },
+          "latency_ms_total": {
+            "type": "number",
+            "title": "Latency Ms Total"
+          },
+          "latency_ms_p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P50"
+          },
+          "latency_ms_p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P95"
+          },
+          "output_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens Per Second",
+            "description": "End to end: output tokens over request latency, chat calls only."
+          },
+          "decode_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decode Tokens Per Second",
+            "description": "Output tokens over the model's own generation time, for providers that report it (Ollama)."
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calls",
+          "errors",
+          "input_tokens",
+          "output_tokens",
+          "estimated_calls",
+          "cost_usd",
+          "unpriced_calls",
+          "latency_ms_total",
+          "stage"
+        ],
+        "title": "StageUsage",
+        "description": "Usage for one pipeline stage, e.g. extraction or reference_extraction."
+      },
+      "UsageSummary": {
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "estimated_calls": {
+            "type": "integer",
+            "title": "Estimated Calls",
+            "description": "Calls whose token counts were estimated from text length because the provider reported none."
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd",
+            "description": "Estimated cost of the priced calls, in USD, at list prices."
+          },
+          "unpriced_calls": {
+            "type": "integer",
+            "title": "Unpriced Calls",
+            "description": "Calls to models missing from the price table; not in cost_usd."
+          },
+          "latency_ms_total": {
+            "type": "number",
+            "title": "Latency Ms Total"
+          },
+          "latency_ms_p50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P50"
+          },
+          "latency_ms_p95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms P95"
+          },
+          "output_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens Per Second",
+            "description": "End to end: output tokens over request latency, chat calls only."
+          },
+          "decode_tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decode Tokens Per Second",
+            "description": "Output tokens over the model's own generation time, for providers that report it (Ollama)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "calls",
+          "errors",
+          "input_tokens",
+          "output_tokens",
+          "estimated_calls",
+          "cost_usd",
+          "unpriced_calls",
+          "latency_ms_total"
+        ],
+        "title": "UsageSummary",
+        "description": "LLM usage over a set of calls."
       },
       "ValidationError": {
         "properties": {

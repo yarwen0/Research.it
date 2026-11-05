@@ -65,6 +65,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Metrics Endpoint
+         * @description LLM usage for a research job: tokens, latency, throughput, cost.
+         *
+         *     Broken down by pipeline stage and by model, so the slow stage and the
+         *     expensive model are both visible. Readable while the job is running.
+         *     Costs are estimates at list prices; see `prices_checked` for their date.
+         */
+        get: operations["get_job_metrics_endpoint_api_jobs__job_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/{job_id}/events": {
         parameters: {
             query?: never;
@@ -398,6 +422,29 @@ export interface components {
             version: string;
         };
         /**
+         * JobMetricsResponse
+         * @description What a research job's LLM calls cost, overall and broken down.
+         */
+        JobMetricsResponse: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /**
+             * Prices Checked
+             * @description Date the price table behind cost_usd was last checked.
+             */
+            prices_checked: string;
+            totals: components["schemas"]["UsageSummary"];
+            /** By Stage */
+            by_stage?: components["schemas"]["StageUsage"][];
+            /** By Model */
+            by_model?: components["schemas"]["ModelUsage"][];
+        };
+        /**
          * JobResponse
          * @description A research job's current state.
          */
@@ -427,6 +474,60 @@ export interface components {
         LatexCompileRequest: {
             /** Latex Text */
             latex_text: string;
+        };
+        /**
+         * ModelUsage
+         * @description Usage for one model and operation.
+         */
+        ModelUsage: {
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /**
+             * Estimated Calls
+             * @description Calls whose token counts were estimated from text length because the provider reported none.
+             */
+            estimated_calls: number;
+            /**
+             * Cost Usd
+             * @description Estimated cost of the priced calls, in USD, at list prices.
+             */
+            cost_usd: number;
+            /**
+             * Unpriced Calls
+             * @description Calls to models missing from the price table; not in cost_usd.
+             */
+            unpriced_calls: number;
+            /** Latency Ms Total */
+            latency_ms_total: number;
+            /** Latency Ms P50 */
+            latency_ms_p50?: number | null;
+            /** Latency Ms P95 */
+            latency_ms_p95?: number | null;
+            /**
+             * Output Tokens Per Second
+             * @description End to end: output tokens over request latency, chat calls only.
+             */
+            output_tokens_per_second?: number | null;
+            /**
+             * Decode Tokens Per Second
+             * @description Output tokens over the model's own generation time, for providers that report it (Ollama).
+             */
+            decode_tokens_per_second?: number | null;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "chat" | "embeddings";
         };
         /**
          * ResearchRequest
@@ -518,6 +619,98 @@ export interface components {
              */
             num_papers: number;
         };
+        /**
+         * StageUsage
+         * @description Usage for one pipeline stage, e.g. extraction or reference_extraction.
+         */
+        StageUsage: {
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /**
+             * Estimated Calls
+             * @description Calls whose token counts were estimated from text length because the provider reported none.
+             */
+            estimated_calls: number;
+            /**
+             * Cost Usd
+             * @description Estimated cost of the priced calls, in USD, at list prices.
+             */
+            cost_usd: number;
+            /**
+             * Unpriced Calls
+             * @description Calls to models missing from the price table; not in cost_usd.
+             */
+            unpriced_calls: number;
+            /** Latency Ms Total */
+            latency_ms_total: number;
+            /** Latency Ms P50 */
+            latency_ms_p50?: number | null;
+            /** Latency Ms P95 */
+            latency_ms_p95?: number | null;
+            /**
+             * Output Tokens Per Second
+             * @description End to end: output tokens over request latency, chat calls only.
+             */
+            output_tokens_per_second?: number | null;
+            /**
+             * Decode Tokens Per Second
+             * @description Output tokens over the model's own generation time, for providers that report it (Ollama).
+             */
+            decode_tokens_per_second?: number | null;
+            /** Stage */
+            stage: string;
+        };
+        /**
+         * UsageSummary
+         * @description LLM usage over a set of calls.
+         */
+        UsageSummary: {
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /**
+             * Estimated Calls
+             * @description Calls whose token counts were estimated from text length because the provider reported none.
+             */
+            estimated_calls: number;
+            /**
+             * Cost Usd
+             * @description Estimated cost of the priced calls, in USD, at list prices.
+             */
+            cost_usd: number;
+            /**
+             * Unpriced Calls
+             * @description Calls to models missing from the price table; not in cost_usd.
+             */
+            unpriced_calls: number;
+            /** Latency Ms Total */
+            latency_ms_total: number;
+            /** Latency Ms P50 */
+            latency_ms_p50?: number | null;
+            /** Latency Ms P95 */
+            latency_ms_p95?: number | null;
+            /**
+             * Output Tokens Per Second
+             * @description End to end: output tokens over request latency, chat calls only.
+             */
+            output_tokens_per_second?: number | null;
+            /**
+             * Decode Tokens Per Second
+             * @description Output tokens over the model's own generation time, for providers that report it (Ollama).
+             */
+            decode_tokens_per_second?: number | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -587,6 +780,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_metrics_endpoint_api_jobs__job_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMetricsResponse"];
                 };
             };
             /** @description Validation Error */
