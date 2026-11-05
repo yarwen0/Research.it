@@ -495,6 +495,14 @@ export interface components {
              */
             lexical_rank?: number | null;
             /**
+             * Flagged
+             * @description Reads as instructions to a model; withheld whenever passages go to an LLM.
+             * @default false
+             */
+            flagged: boolean;
+            /** Flag Reasons */
+            flag_reasons?: string[];
+            /**
              * Id
              * @description The id the answer cites it by, e.g. S1.
              */
@@ -549,6 +557,11 @@ export interface components {
              * @description Citations of sources the model was never given, removed from the answer.
              */
             dropped_citations?: string[];
+            /**
+             * Withheld
+             * @description Retrieved passages withheld from the model as possible prompt injection.
+             */
+            withheld?: components["schemas"]["WithheldSource"][];
             /** Strategy */
             strategy: string;
             /** Embedding Model */
@@ -952,6 +965,14 @@ export interface components {
              * @description 1-based rank in the BM25 list.
              */
             lexical_rank?: number | null;
+            /**
+             * Flagged
+             * @description Reads as instructions to a model; withheld whenever passages go to an LLM.
+             * @default false
+             */
+            flagged: boolean;
+            /** Flag Reasons */
+            flag_reasons?: string[];
         };
         /** SearchResponse */
         SearchResponse: {
@@ -1122,6 +1143,20 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WithheldSource
+         * @description A retrieved passage kept out of the prompt because it reads as instructions.
+         */
+        WithheldSource: {
+            /** Paper Id */
+            paper_id: string;
+            /** Paper Title */
+            paper_title: string;
+            /** Section */
+            section?: string | null;
+            /** Reasons */
+            reasons?: string[];
         };
     };
     responses: never;

@@ -824,6 +824,19 @@
             "title": "Lexical Rank",
             "description": "1-based rank in the BM25 list."
           },
+          "flagged": {
+            "type": "boolean",
+            "title": "Flagged",
+            "description": "Reads as instructions to a model; withheld whenever passages go to an LLM.",
+            "default": false
+          },
+          "flag_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flag Reasons"
+          },
           "id": {
             "type": "string",
             "title": "Id",
@@ -918,6 +931,14 @@
             "type": "array",
             "title": "Dropped Citations",
             "description": "Citations of sources the model was never given, removed from the answer."
+          },
+          "withheld": {
+            "items": {
+              "$ref": "#/components/schemas/WithheldSource"
+            },
+            "type": "array",
+            "title": "Withheld",
+            "description": "Retrieved passages withheld from the model as possible prompt injection."
           },
           "strategy": {
             "type": "string",
@@ -1727,6 +1748,19 @@
             ],
             "title": "Lexical Rank",
             "description": "1-based rank in the BM25 list."
+          },
+          "flagged": {
+            "type": "boolean",
+            "title": "Flagged",
+            "description": "Reads as instructions to a model; withheld whenever passages go to an LLM.",
+            "default": false
+          },
+          "flag_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flag Reasons"
           }
         },
         "type": "object",
@@ -2142,6 +2176,43 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WithheldSource": {
+        "properties": {
+          "paper_id": {
+            "type": "string",
+            "title": "Paper Id"
+          },
+          "paper_title": {
+            "type": "string",
+            "title": "Paper Title"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_id",
+          "paper_title"
+        ],
+        "title": "WithheldSource",
+        "description": "A retrieved passage kept out of the prompt because it reads as instructions."
       }
     }
   }
