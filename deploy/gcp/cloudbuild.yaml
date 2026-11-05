@@ -1,0 +1,90 @@
+# Test, build and roll out Research.it to Cloud Run.
+#
+#   gcloud builds submit --config deploy/gcp/cloudbuild.yaml \
+#     --service-account "projects/PROJECT_ID/serviceAccounts/DEPLOYER_EMAIL" \
+#     --substitutions _REGION=us-central1
+#
+# DEPLOYER_EMAIL is the `deployer_service_account` Terraform output. Terraform
+# (deploy/gcp/terraform) creates the services, identities, database and
+# secrets; this only ships new images to them. Run from the repository root.
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: researchit
+  _API_SERVICE: researchit-api
+  _WEB_SERVICE: researchit-web
+
+options:
+  # Required when a build runs as a user-specified service account.
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s
+
+steps:
+  # The suite CI runs: no network, no keys, no model. A deploy never ships an
+  # image the tests have not passed against.
+  - id: test
+    name: python:3.12-slim
+    dir: be-main
+    entrypoint: bash
+    args:
+      - -c
+      - pip install --quiet --no-cache-dir -r requirements-dev.txt && pytest -q
+
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$BUILD_ID
+      - be-main
+
+  - id: push-api
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$BUILD_ID"]
+
+  - id: deploy-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - ${_API_SERVICE}
+      - --region=${_REGION}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/api:$BUILD_ID
+
+  # The browser calls the API itself, so the API's URL is compiled into the
+  # frontend bundle; it has to be known before the web image is built.
+  - id: api-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - gcloud run services describe ${_API_SERVICE} --region=${_REGION} --format='value(uri)' > /workspace/api_url
+
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      # $$ is a literal $ to Cloud Build, leaving the substitution to bash.
+      - >-
+        docker build
+        --build-arg NEXT_PUBLIC_API_URL="$$(cat /workspace/api_url)"
+        --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$BUILD_ID
+        fe-main
+
+  - id: push-web
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$BUILD_ID"]
+
+  - id: deploy-web
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - ${_WEB_SERVICE}
+      - --region=${_REGION}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/web:$BUILD_ID
