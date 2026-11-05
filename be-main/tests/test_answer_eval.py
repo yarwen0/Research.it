@@ -98,6 +98,17 @@ class TestSummarize:
         assert summary["dropped_citations"] == 1
         assert summary["latency_ms_p50"] == pytest.approx(2000.0)
 
+    def test_citing_every_supplied_passage_is_reported(self):
+        # Such an answer is "supported" whatever it says, so the breadth has
+        # to be visible beside that rate.
+        everything = _answer("2.5e-4", cited=["learning rate of 2.5e-4", "other", "more"])
+        everything["sources_supplied"] = 3
+        one = _answer("2.5e-4", cited=["learning rate of 2.5e-4"])
+        one["sources_supplied"] = 3
+        summary = summarize([score(LOOKUP, everything), score(LOOKUP, one)])
+        assert summary["answerable"]["supported_by_citation"] == 1.0
+        assert summary["citations"] == {"mean_sources_cited": 2.0, "cited_every_source": 0.5}
+
 
 class TestQuestionSet:
     @pytest.fixture(scope="class")
