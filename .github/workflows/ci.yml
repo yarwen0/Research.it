@@ -138,7 +138,7 @@ jobs:
         run: git diff --exit-code -- fe-main/openapi.json fe-main/lib/api-types.ts
 
   evals:
-    name: Gap detection quality
+    name: Gap detection and retrieval quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -158,6 +158,10 @@ jobs:
         # Printed to the log so a quality change is visible on every PR, not
         # only when the regression gate in tests/test_evals.py trips.
         run: python -m evals.run_eval
+      - name: Report retrieval metrics
+        # Same idea, for tests/test_retrieval_eval.py. Scored from committed
+        # embeddings, so no model is needed.
+        run: python -m evals.retrieval.run
 
   docker:
     name: Docker images build
