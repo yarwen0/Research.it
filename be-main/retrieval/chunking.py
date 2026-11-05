@@ -206,7 +206,12 @@ _PROFILE_FIELDS = (
 
 
 def _fold(term: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", term.lower())
+    """Case and snake_case folded away, punctuation kept.
+
+    Punctuation is what separates "Human3.6M" from "human36m" for a lexical
+    search, so it has to count as a difference.
+    """
+    return " ".join(term.replace("_", " ").lower().split())
 
 
 def _terms(value: Any) -> list[str]:
