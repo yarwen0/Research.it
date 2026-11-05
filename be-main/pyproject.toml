@@ -35,7 +35,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["db", "services", "utils", "api", "telemetry", "retrieval", "config.py", "main.py", "rate_limit.py", "vertex_ai.py"]
+files = ["db", "services", "utils", "api", "telemetry", "retrieval", "agents", "config.py", "main.py", "rate_limit.py", "vertex_ai.py"]
 exclude = "(^utils/regex\\.py$|^alembic/)"
 
 warn_redundant_casts = true
