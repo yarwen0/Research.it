@@ -155,6 +155,9 @@ RATE_LIMIT_ASK = _maybe("RATE_LIMIT_ASK") or "60/hour"
 # An assistant turn is a plan, a few tool-using specialists, a draft and a
 # critique: roughly ten LLM calls, so it sits between a question and a run.
 RATE_LIMIT_ASSISTANT = _maybe("RATE_LIMIT_ASSISTANT") or "20/hour"
+# Per client, across every request to /mcp/: protocol messages and tool calls
+# alike, and failed token guesses too.
+RATE_LIMIT_MCP = _maybe("RATE_LIMIT_MCP") or "60/minute"
 
 # Off by default: X-Forwarded-For is trivially spoofed unless something in
 # front of the app is guaranteed to overwrite it. Turn on when deployed behind

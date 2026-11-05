@@ -19,17 +19,24 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import time
 from collections.abc import Callable
 from typing import Any, Literal
 
+from limits import parse
+from limits.storage import storage_from_string
+from limits.strategies import FixedWindowRateLimiter
 from mcp.server.fastmcp import FastMCP
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from agents import data
+from config import RATE_LIMIT_ENABLED, RATE_LIMIT_MCP, RATE_LIMIT_STORAGE_URI
 from core import create_llm_client
+from rate_limit import client_identifier
 from retrieval.embedder import ClientEmbedder
 from retrieval.hybrid import RetrievedChunk
 from services.rag import CorpusQA
@@ -180,6 +187,47 @@ def build_server(
     return mcp
 
 
+async def _send_json(send: Send, status: int, body: dict[str, Any], headers=()) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"application/json"), *headers],
+        }
+    )
+    await send({"type": "http.response.body", "body": json.dumps(body).encode()})
+
+
+class RateLimitGate:
+    """A per-client request budget for the mounted MCP app.
+
+    The API's rate limiting cannot see it: slowapi's middleware matches each
+    request to a route endpoint, finds none for a mounted ASGI app, and treats
+    the request as exempt. This applies the same kind of limit, keyed the same
+    way, before the token is even checked — so guessing tokens is rate limited
+    as well.
+    """
+
+    def __init__(self, app: ASGIApp, limit: str, *, storage_uri: str = RATE_LIMIT_STORAGE_URI) -> None:
+        self.app = app
+        self.limit = parse(limit)
+        self._limiter = FixedWindowRateLimiter(storage_from_string(storage_uri))
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and RATE_LIMIT_ENABLED:
+            client = client_identifier(Request(scope))
+            if not self._limiter.hit(self.limit, "mcp", client):
+                reset = self._limiter.get_window_stats(self.limit, "mcp", client).reset_time
+                await _send_json(
+                    send,
+                    429,
+                    {"detail": f"Rate limit exceeded: {self.limit}"},
+                    headers=[(b"retry-after", str(max(1, int(reset - time.time()))).encode())],
+                )
+                return
+        await self.app(scope, receive, send)
+
+
 class BearerTokenGate:
     """Refuse any request without the configured bearer token.
 
@@ -195,24 +243,23 @@ class BearerTokenGate:
         if scope["type"] == "http":
             supplied = dict(scope["headers"]).get(b"authorization", b"")
             if not hmac.compare_digest(supplied, self._expected):
-                body = json.dumps({"detail": "A valid bearer token is required."}).encode()
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 401,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (b"www-authenticate", b"Bearer"),
-                        ],
-                    }
+                await _send_json(
+                    send,
+                    401,
+                    {"detail": "A valid bearer token is required."},
+                    headers=[(b"www-authenticate", b"Bearer")],
                 )
-                await send({"type": "http.response.body", "body": body})
                 return
         await self.app(scope, receive, send)
 
 
 def mount_http(
-    app: Any, token: str, *, path: str = "/mcp", llm_client_factory: Callable[[], Any] = create_llm_client
+    app: Any,
+    token: str,
+    *,
+    path: str = "/mcp",
+    rate_limit: str = RATE_LIMIT_MCP,
+    llm_client_factory: Callable[[], Any] = create_llm_client,
 ) -> StreamableHTTPSessionManager:
     """Serve the MCP server over streamable HTTP at `path`/, behind a token.
 
@@ -232,5 +279,5 @@ def mount_http(
         # to it cannot produce.
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
-    app.mount(path, BearerTokenGate(mcp.streamable_http_app(), token))
+    app.mount(path, RateLimitGate(BearerTokenGate(mcp.streamable_http_app(), token), rate_limit))
     return mcp.session_manager
