@@ -19,6 +19,8 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 
+from opentelemetry import trace
+
 from api.arxiv import ArxivClient, ArxivRateLimitError, TopicGenerator
 from core import PDFExtractor, ReferenceParameterExtractorFallback, create_llm_client
 from db.repositories import GraphRepository, OntologyRepository, ProjectRepository
@@ -29,6 +31,7 @@ from services.events import PipelineEvent, completed, error, processing, progres
 from utils.graph import TrendsCreator
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer(__name__)
 
 # How often the topic stage checks its worker thread for new progress. Short
 # enough that the UI keeps moving, long enough not to spin the event loop.
@@ -83,8 +86,14 @@ class ResearchPipeline:
         self.extractor = PDFExtractor(llm_client=self.llm_client)
 
     async def _run_blocking(self, fn, *args):
-        """Push blocking work onto the executor, off the event loop."""
-        return await asyncio.get_event_loop().run_in_executor(None, fn, *args)
+        """Push blocking work onto a worker thread, off the event loop.
+
+        `to_thread` rather than `run_in_executor` because it copies the
+        current context into the thread. The job's usage collector and trace
+        span live in context variables; without the copy, every LLM call made
+        from a worker thread would go unattributed.
+        """
+        return await asyncio.to_thread(fn, *args)
 
     # -- stages ------------------------------------------------------------
 
@@ -116,31 +125,36 @@ class ResearchPipeline:
         """Extract → normalize → map one paper. Raises on unusable LLM output."""
         paper_id = paper_data["paper_id"]
 
-        extraction_data = self._parse_llm_json(
-            await self._run_blocking(
-                self.extractor.extract_from_raw_text, paper_data["text"]
-            ),
-            stage="extraction",
-            paper_id=paper_id,
-        )
+        # One span per paper, so a trace shows which paper a slow extraction
+        # belonged to rather than an undifferentiated run of LLM calls.
+        with _tracer.start_as_current_span(
+            "process_paper", attributes={"researchit.paper_id": paper_id}
+        ):
+            extraction_data = self._parse_llm_json(
+                await self._run_blocking(
+                    self.extractor.extract_from_raw_text, paper_data["text"]
+                ),
+                stage="extraction",
+                paper_id=paper_id,
+            )
 
-        normalized_data = self._parse_llm_json(
-            await self._run_blocking(
-                self.extractor.normalize_extracted_parameters, extraction_data
-            ),
-            stage="normalization",
-            paper_id=paper_id,
-        )
+            normalized_data = self._parse_llm_json(
+                await self._run_blocking(
+                    self.extractor.normalize_extracted_parameters, extraction_data
+                ),
+                stage="normalization",
+                paper_id=paper_id,
+            )
 
-        def map_ontology():
-            # A short transaction per paper: one held open for the whole run
-            # would block every other writer for minutes.
-            with session_scope() as session:
-                OntologyRepository(session, self.project_id).map_paper(
-                    normalized_data, paper_id
-                )
+            def map_ontology():
+                # A short transaction per paper: one held open for the whole
+                # run would block every other writer for minutes.
+                with session_scope() as session:
+                    OntologyRepository(session, self.project_id).map_paper(
+                        normalized_data, paper_id
+                    )
 
-        await self._run_blocking(map_ontology)
+            await self._run_blocking(map_ontology)
 
         return {
             "paper_id": paper_id,
@@ -188,20 +202,21 @@ class ResearchPipeline:
         # callback is drained as it fires so the stream keeps moving; passing
         # None here left the UI silent for the whole stage and looking wedged.
         updates: queue.Queue[tuple[int, int]] = queue.Queue()
-        search = asyncio.get_event_loop().run_in_executor(
-            None,
-            functools.partial(
-                self.arxiv_client.search_and_extract_papers,
-                topic,
-                self.papers_per_topic,
-                None,  # download_dir
-                None,  # max_pages — extract all
-                False,  # cleanup — keep downloaded PDFs
-                1.0,  # delay_between_downloads
-                lambda done, total: updates.put((done, total)),
-                self.use_reranking,
-                self.broad_search_multiplier,
-            ),
+        search = asyncio.ensure_future(
+            asyncio.to_thread(
+                functools.partial(
+                    self.arxiv_client.search_and_extract_papers,
+                    topic,
+                    self.papers_per_topic,
+                    None,  # download_dir
+                    None,  # max_pages — extract all
+                    False,  # cleanup — keep downloaded PDFs
+                    1.0,  # delay_between_downloads
+                    lambda done, total: updates.put((done, total)),
+                    self.use_reranking,
+                    self.broad_search_multiplier,
+                )
+            )
         )
 
         while not search.done():
