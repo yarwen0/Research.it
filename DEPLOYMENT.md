@@ -142,6 +142,17 @@ on `main` with the same config and service account.
 - **Observability is on.** Logs are JSON in Cloud Logging, carrying each
   request's id; spans for every job, stage and LLM call go to Cloud Trace.
 
+### MCP for outside agents
+
+Set `enable_mcp = true` to serve the corpus tools over MCP at the API's
+`/mcp/`. Terraform generates the bearer token straight into Secret Manager —
+write-only, so it is not in state either — and the `mcp_url` output says
+where to point clients:
+
+```bash
+gcloud secrets versions access latest --secret researchit-mcp-api-key
+```
+
 To tear down, set `deletion_protection = false`, apply, then destroy.
 
 ### Vertex AI without deploying
@@ -170,6 +181,7 @@ The project needs the Vertex AI API enabled and your account
 | `VERTEX_MODEL`             | backend   | `gemini-2.5-flash-lite`  | Gemini model on Vertex AI                  |
 | `VERTEX_EMBED_MODEL`       | backend   | `text-embedding-005`     | Embedding model on Vertex AI               |
 | `TRUSTED_PROXY_HOPS`       | backend   | `0`                      | Proxies that append to `X-Forwarded-For`   |
+| `MCP_API_KEY`              | backend   | —                        | Serve MCP at `/mcp/` behind this token     |
 | `CORS_ORIGINS`             | backend   | `*`                      | Comma-separated allowed browser origins    |
 | `HOST` / `PORT`            | backend   | `0.0.0.0` / `8000`       | Bind address                               |
 | `OTEL_TRACES_EXPORTER`     | backend   | `none`                   | `console`, `otlp` or `gcp` (Cloud Trace)   |
