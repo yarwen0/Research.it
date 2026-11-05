@@ -81,9 +81,10 @@ LOG_LEVEL = (_maybe("LOG_LEVEL") or "INFO").upper()
 LOG_JSON = _truthy(os.getenv("LOG_JSON"))
 
 # --- Telemetry -------------------------------------------------------------
-# Where trace spans go: none, console, or otlp. Spans are created either way;
-# with "none" they are simply never exported, so tracing costs nothing until
-# it is switched on. `otlp` reads the standard OTEL_EXPORTER_OTLP_* variables.
+# Where trace spans go: none, console, otlp, or gcp (Cloud Trace). Spans are
+# created either way; with "none" they are simply never exported, so tracing
+# costs nothing until it is switched on. `otlp` reads the standard
+# OTEL_EXPORTER_OTLP_* variables; `gcp` uses Application Default Credentials.
 OTEL_TRACES_EXPORTER = (_maybe("OTEL_TRACES_EXPORTER") or "none").lower()
 OTEL_SERVICE_NAME = _maybe("OTEL_SERVICE_NAME") or "researchit-api"
 
