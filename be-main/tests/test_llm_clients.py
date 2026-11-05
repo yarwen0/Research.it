@@ -195,3 +195,82 @@ class TestOpenRouter:
         assert (call.operation, call.input_tokens) == ("embeddings", 9)
         # Not in the price table, and not a :free variant.
         assert call.cost_usd is None
+
+
+class TestEmbeddingTaskHints:
+    """Documents and queries are embedded differently where the model expects it."""
+
+    @staticmethod
+    def _ollama(monkeypatch, embed_model="nomic-embed-text"):
+        client = OllamaClient(model="qwen2.5:7b", embed_model=embed_model)
+        sent: list[dict] = []
+
+        def post(path, body):
+            sent.append(body)
+            return {"embeddings": [[0.0]] * len(body["input"])}
+
+        monkeypatch.setattr(client, "_post", post)
+        return client, sent
+
+    def test_nomic_gets_its_task_prefixes(self, monkeypatch):
+        client, sent = self._ollama(monkeypatch)
+        client.get_embeddings(["a passage"], task="document")
+        client.get_embeddings(["a question"], task="query")
+        assert sent[0]["input"] == ["search_document: a passage"]
+        assert sent[1]["input"] == ["search_query: a question"]
+
+    def test_a_tagged_model_name_still_gets_them(self, monkeypatch):
+        client, sent = self._ollama(monkeypatch, embed_model="nomic-embed-text:latest")
+        client.get_embeddings(["a question"], task="query")
+        assert sent[0]["input"] == ["search_query: a question"]
+
+    def test_other_local_models_are_sent_the_text_unchanged(self, monkeypatch):
+        client, sent = self._ollama(monkeypatch, embed_model="mxbai-embed-large")
+        client.get_embeddings(["a question"], task="query")
+        assert sent[0]["input"] == ["a question"]
+
+    def test_no_task_means_no_prefix(self, monkeypatch):
+        # Reranking and reviews embed without a task, exactly as before.
+        client, sent = self._ollama(monkeypatch)
+        client.get_embeddings(["an abstract"])
+        assert sent[0]["input"] == ["an abstract"]
+
+    def test_gemini_sends_the_task_type(self, monkeypatch):
+        monkeypatch.setattr(core, "OPENROUTER_FOR_EMBEDDINGS", False)
+        client = GeminiClient(api_key="k")
+        sent: list[dict] = []
+        monkeypatch.setattr(
+            client,
+            "_post",
+            lambda url, body, **kw: sent.append(body) or {"embeddings": [{"values": [1.0]}]},
+        )
+        client.get_embeddings(["which datasets?"], task="query")
+        assert sent[0]["requests"][0]["taskType"] == "RETRIEVAL_QUERY"
+
+    def test_gemini_retrieval_never_detours_through_openrouter(self, monkeypatch):
+        # A fallback between providers mid-corpus would mix vector spaces.
+        monkeypatch.setattr(core, "OPENROUTER_API_KEY", "k")
+        monkeypatch.setattr(core, "OPENROUTER_FOR_EMBEDDINGS", True)
+
+        def openrouter_called(*_args, **_kwargs):
+            raise AssertionError("retrieval embeddings went to OpenRouter")
+
+        monkeypatch.setattr(OpenRouterClient, "get_embeddings", openrouter_called)
+        client = GeminiClient(api_key="k")
+        monkeypatch.setattr(
+            client, "_post", lambda url, body, **kw: {"embeddings": [{"values": [1.0]}]}
+        )
+        assert client.get_embeddings(["a passage"], task="document") == [[1.0]]
+
+    def test_an_unknown_task_is_rejected(self, monkeypatch):
+        client, _ = self._ollama(monkeypatch)
+        with pytest.raises(ValueError, match="Unknown embedding task"):
+            client.get_embeddings(["x"], task="classification")
+
+    def test_each_client_names_its_retrieval_model(self):
+        assert OllamaClient(model="m", embed_model="nomic-embed-text").embedding_model_id == "nomic-embed-text"
+        assert GeminiClient(api_key="k").embedding_model_id == "gemini-embedding-001"
+        assert (
+            OpenRouterClient(api_key="k", model="m").embedding_model_id
+            == "sentence-transformers/all-minilm-l12-v2"
+        )
