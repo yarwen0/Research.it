@@ -153,6 +153,14 @@ RATE_LIMIT_ASK = _maybe("RATE_LIMIT_ASK") or "60/hour"
 # the proxy's address and one caller can exhaust everyone's quota.
 TRUST_PROXY_HEADERS = _truthy(os.getenv("TRUST_PROXY_HEADERS"))
 
+# For proxies that append to X-Forwarded-For instead of overwriting it, as
+# Google's front end does on Cloud Run: the number of trusted proxies that
+# append. The caller is then the entry that many places from the right — the
+# address the outermost trusted proxy actually saw. Anything left of it was
+# sent by the client and proves nothing. Takes precedence over
+# TRUST_PROXY_HEADERS; 0 leaves it off.
+TRUSTED_PROXY_HOPS = _int("TRUSTED_PROXY_HOPS", 0)
+
 NO_LLM_PROVIDER_MESSAGE = (
     "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
     "(no key needed), LLM_PROVIDER=vertex for Vertex AI with Google Cloud "

@@ -20,6 +20,7 @@ from config import (
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_STORAGE_URI,
     TRUST_PROXY_HEADERS,
+    TRUSTED_PROXY_HOPS,
 )
 
 
@@ -29,13 +30,25 @@ def client_identifier(request: Request) -> str:
     Behind a proxy every request appears to come from the proxy, so one caller
     would burn the quota for all of them. X-Forwarded-For fixes that, but it is
     client-supplied and spoofable, so it is only consulted when the deployment
-    declares it is behind a proxy that overwrites the header.
+    declares what sits in front of it:
+
+    * TRUSTED_PROXY_HOPS=n — n proxies that append to the header. The caller is
+      the n-th entry from the right; whatever is left of it the client wrote
+      itself. Reading the left-most entry here would let any caller pick its
+      own quota bucket.
+    * TRUST_PROXY_HEADERS — a proxy that overwrites the header, leaving the
+      original client left-most.
     """
-    if TRUST_PROXY_HEADERS:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            # Left-most entry is the original client; the rest are hops.
-            return forwarded.split(",")[0].strip()
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded and TRUSTED_PROXY_HOPS:
+        hops = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
+        # Fewer entries than trusted proxies means the header did not come
+        # through them; fall back to the peer rather than guess.
+        if len(hops) >= TRUSTED_PROXY_HOPS:
+            return hops[-TRUSTED_PROXY_HOPS]
+    elif forwarded and TRUST_PROXY_HEADERS:
+        # Left-most entry is the original client; the rest are hops.
+        return forwarded.split(",")[0].strip()
 
     return get_remote_address(request)
 
