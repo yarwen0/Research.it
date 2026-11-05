@@ -81,6 +81,16 @@ charset-normalizer==3.4.4
 idna==3.11
 urllib3==2.5.0
 
+# --- Google Cloud ---
+# Application Default Credentials for Vertex AI and Cloud Trace: the runtime's
+# service account on Cloud Run, `gcloud auth application-default login` locally.
+google-auth==2.62.1
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
+pyasn1==0.6.5
+pyasn1-modules==0.4.2
+
 # --- Embeddings & ML (reranking, similarity) ---
 numpy==1.26.4
 scikit-learn==1.5.2
