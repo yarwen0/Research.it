@@ -22,7 +22,7 @@ flowchart LR
 
     subgraph Ext["External"]
         AX[arXiv]
-        LLM[Gemini · OpenRouter · Ollama]
+        LLM[Gemini · Vertex AI · OpenRouter · Ollama]
         TEX[pdflatex]
     end
 
@@ -227,6 +227,27 @@ A project with nothing indexed is refused before any model call. The live
 check against a real corpus refused the one question its papers could not
 answer, and still cited the passage that said what the papers did use.
 
+### On Google Cloud, nothing holds a key
+
+The Cloud Run deployment ([`deploy/gcp`](deploy/gcp)) calls Gemini through
+Vertex AI and exports traces to Cloud Trace, both authorized as the API's
+own service account through Application Default Credentials. There is no API
+key to store, rotate or leak. The Vertex client
+([`vertex_ai.py`](be-main/vertex_ai.py)) is the Gemini client with a
+different endpoint and a bearer token instead of a key in the URL, since the
+two APIs share request and response bodies.
+
+The one secret left, the database password, is generated during
+`terraform apply` and passed to Cloud SQL and Secret Manager through
+write-only arguments, so it never reaches Terraform state.
+
+Moving behind Google's front end surfaced a rate-limiting flaw. The limiter
+keyed on the left-most `X-Forwarded-For` entry, correct for a proxy that
+overwrites the header and wrong for one that appends to it, as Google's does:
+there the left-most entry is whatever the client sent, and a caller could
+pick a fresh quota bucket per request. `TRUSTED_PROXY_HOPS` reads the entry
+the proxy appended instead.
+
 ### Authors are scoped per project
 
 Author names in bibliographies are not reliable identity. A global author table
@@ -244,6 +265,7 @@ the signal a citation graph exists to show — appeared as disconnected nodes.
 ```
 be-main/
 ├── main.py            App wiring: CORS, rate limits, lifespan, migrations
+├── vertex_ai.py       Gemini on Vertex AI, authorized by default credentials
 ├── api/               Routes. Validate, delegate, shape the response.
 ├── services/          Pipeline logic, transport-agnostic
 │   ├── events.py          Progress events
@@ -256,7 +278,7 @@ be-main/
 ├── utils/             LaTeX, embeddings, charts, path containment
 ├── telemetry/         LLM metering, pricing, rollups, trace export
 ├── retrieval/         Chunking, embeddings, BM25 + pgvector hybrid search, indexing
-├── evals/             Gap detection benchmark
+├── evals/             Gap detection and retrieval benchmarks
 └── alembic/           Migrations
 
 fe-main/
@@ -276,7 +298,9 @@ Stated plainly, because a reviewer will find them anyway:
 
 - **No authentication.** Every run is anonymous, and anyone with a
   `project_id` can read that graph. Rate limiting is the only abuse control.
-- **In-process jobs.** They do not survive a restart or spread across workers.
+- **In-process jobs.** They do not survive a restart or spread across workers,
+  which is why the Cloud Run deployment pins the API to one instance with CPU
+  always allocated.
 - **`utils/graph.py` is still 1268 lines.** `TrendsCreator` needs its
   per-analysis methods turned into standalone builders; that is a real
   refactor, not a file move.
