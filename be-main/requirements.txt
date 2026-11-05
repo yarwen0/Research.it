@@ -91,6 +91,34 @@ pycparser==3.12
 pyasn1==0.6.5
 pyasn1-modules==0.4.2
 
+# --- Agents ---
+# LangGraph runs the research assistant: a supervisor, specialists, a writer
+# and a critic as a state graph with bounded loops. The LLM calls stay on the
+# app's own clients, so langchain-core is only LangGraph's foundation here.
+langgraph==1.2.20
+langgraph-checkpoint==4.3.1
+langgraph-prebuilt==1.1.1
+langgraph-sdk==0.4.13
+langchain-core==1.7.6
+langchain-protocol==0.0.21
+langsmith==0.14.17
+jsonpatch==1.42
+jsonpointer==3.8
+tenacity==9.2.1
+ormsgpack==1.13.0
+xxhash==4.0.2
+orjson==3.13.0
+uuid-utils==0.19.0
+zstandard==0.25.0
+requests-toolbelt==1.0.0
+httpx==0.28.1
+httpcore==1.0.9
+httpx2==2.16.0
+httpcore2==2.16.0
+truststore==0.10.5
+distro==1.9.0
+packaging==26.2
+
 # --- Embeddings & ML (reranking, similarity) ---
 numpy==1.26.4
 scikit-learn==1.5.2
