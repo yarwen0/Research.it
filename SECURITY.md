@@ -63,10 +63,16 @@ chain of LLM requests, so it gets 5/hour against a 120/minute general budget.
 
 Two deployment details matter:
 
-- **`TRUST_PROXY_HEADERS`** must be on behind a proxy and off otherwise.
-  Off behind a proxy, every client shares the proxy's address and one caller
-  starves everyone. On without a proxy, `X-Forwarded-For` is spoofable and a
-  caller mints a fresh bucket per request.
+- **`TRUST_PROXY_HEADERS`** must be on behind a proxy that overwrites
+  `X-Forwarded-For` and off otherwise. Off behind a proxy, every client shares
+  the proxy's address and one caller starves everyone. On without a proxy,
+  `X-Forwarded-For` is spoofable and a caller mints a fresh bucket per
+  request.
+- **`TRUSTED_PROXY_HOPS`** replaces it behind proxies that *append* to the
+  header — Google's front end does, so the Cloud Run deployment sets it to 1.
+  There the left-most entry is whatever the client sent, and trusting it
+  would let a caller pick its own bucket; the limiter reads the entry the
+  proxy appended instead.
 - **`RATE_LIMIT_STORAGE_URI`** defaults to in-memory, which is per-process.
   With N workers the effective limit is N×. Point it at Redis before scaling
   past one.
