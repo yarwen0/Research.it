@@ -24,6 +24,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -314,6 +315,46 @@ class JobEvent(Base):
     )
 
     job: Mapped[Job] = relationship(back_populates="events")
+
+
+class LLMCallRecord(Base):
+    """One LLM request made during a job.
+
+    Individual calls rather than running counters: percentiles and per-stage
+    breakdowns need the calls themselves, and a run makes at most a few
+    hundred of them.
+    """
+
+    __tablename__ = "llm_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+
+    # The pipeline step that made the call, e.g. "extraction".
+    stage: Mapped[str | None] = mapped_column(String(64), default=None)
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(255))
+    operation: Mapped[str] = mapped_column(String(32))
+
+    input_tokens: Mapped[int | None] = mapped_column(Integer, default=None)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, default=None)
+    # True when the provider reported no usage and the counts were estimated
+    # from text length.
+    usage_estimated: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    latency_ms: Mapped[float] = mapped_column(Float)
+    generation_ms: Mapped[float | None] = mapped_column(Float, default=None)
+    # None when the model is not in the price table, which is not the same
+    # thing as free.
+    cost_usd: Mapped[float | None] = mapped_column(Float, default=None)
+
+    status: Mapped[str] = mapped_column(String(16), default="ok")
+    error: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
 
 
 class Review(Base):
