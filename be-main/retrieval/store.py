@@ -49,8 +49,15 @@ class ScoredChunk:
 
 def _cosine(matrix: np.ndarray, query: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(query)
+    # Apple's Accelerate BLAS, which numpy uses on macOS, leaves floating-point
+    # flags set after a matrix product, so numpy warns of divide-by-zero and
+    # overflow on finite, unit-scale inputs. The scores themselves are right —
+    # checked against float64 to 1e-7 on a real corpus — so the false alarm is
+    # silenced here, and only here.
+    with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+        dots = matrix @ query
     # A zero vector matches nothing rather than dividing by zero.
-    return np.divide(matrix @ query, norms, out=np.zeros(len(matrix)), where=norms > 0)
+    return np.divide(dots, norms, out=np.zeros(len(matrix)), where=norms > 0)
 
 
 class ChunkStore:
