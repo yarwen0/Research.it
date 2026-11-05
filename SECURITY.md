@@ -49,6 +49,8 @@ abstract.
 | The system prompt states sources are data, not instructions | The model obeying text it was asked to quote |
 | Citations checked against the ids actually supplied | An answer citing evidence that was never retrieved |
 | Structured output (JSON schema) for answers | Free-form text smuggling in fake fields |
+| Every agent prompt states tool results are data | Paper text steering an agent's next tool call |
+| Evidence ids assigned by tools, validated in the final answer | An agent citing evidence no tool returned |
 
 This reduces prompt injection; it does not eliminate it. A model can still be
 steered by text in its context, and the answer it writes is shown to a user.
