@@ -2,7 +2,8 @@
 
 Each tool is a plain function of data the pipeline already produced —
 retrieved passages, structured paper records, the ontology, the symbolic gap
-finder, the citation graph. A tool returns text for the model to read, and
+finder, the citation graph — read through `agents.data`, the same layer the
+MCP server exposes. A tool returns text for the model to read, and
 registers every fact it returns as evidence under an id (E1, E2, ...) that a
 final answer has to cite. Evidence is the boundary between what the corpus
 says and what a model writes, so it is recorded by the tools, never by the
@@ -16,14 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select
-
-from db.models import Citation, OntologyTerm, Paper
-from db.session import session_scope
-from retrieval.chunking import render_profile
+from agents.data import GAP_TYPES, ProjectData
 from retrieval.embedder import Embedder
-from retrieval.hybrid import HybridRetriever
-from services.gaps import find_gaps, to_gap_finder_papers
 
 # Observations go back into a model's context on every later step; a local
 # 7B model with an 8k window cannot afford whole passages.
@@ -127,11 +122,15 @@ def _as_int(value: Any, default: int, *, low: int, high: int) -> int:
 
 
 class ProjectTools:
-    """The tools, bound to one project and one turn's evidence log."""
+    """The tools, bound to one project and one turn's evidence log.
+
+    Each one asks `ProjectData` and turns the answer into text for a model,
+    registering every fact it returns as evidence on the way.
+    """
 
     def __init__(self, project_id: str, embedder: Embedder, evidence: EvidenceLog) -> None:
         self.project_id = project_id
-        self.embedder = embedder
+        self.data = ProjectData(project_id, embedder)
         self.evidence = evidence
 
     # -- tools ---------------------------------------------------------------
@@ -140,11 +139,8 @@ class ProjectTools:
         query = str(args.get("query") or "").strip()
         if not query:
             return "search_passages needs a query."
-        k = _as_int(args.get("top"), 5, low=1, high=8)
-        with session_scope() as session:
-            hits = HybridRetriever(session, self.embedder).retrieve(self.project_id, query, k=k)
         lines = []
-        for hit in hits:
+        for hit in self.data.passages(query, _as_int(args.get("top"), 5, low=1, high=8)):
             evidence = self.evidence.add(
                 "passage",
                 hit.text,
@@ -164,26 +160,19 @@ class ProjectTools:
         wanted = str(args.get("paper_id") or args.get("query") or "").strip()
         if not wanted:
             return "paper_record needs a paper_id or a few words of the title."
-        with session_scope() as session:
-            base = select(Paper).where(
-                Paper.project_id == self.project_id, Paper.is_processed.is_(True)
-            )
-            paper = session.scalars(base.where(Paper.external_id == wanted)).first()
-            if paper is None:
-                paper = session.scalars(
-                    base.where(func.lower(Paper.title).contains(wanted.lower())).order_by(Paper.id)
-                ).first()
-            if paper is None:
-                return f"No processed paper matches {wanted!r}."
-            record = render_profile(paper.title, paper.extraction, paper.normalized)
-            external_id, title = paper.external_id, paper.title
-
-        if not record:
-            return f"{title} ({external_id}) has no structured record."
+        paper = self.data.paper(wanted)
+        if paper is None:
+            return f"No processed paper matches {wanted!r}."
+        if not paper.record:
+            return f"{paper.title} ({paper.paper_id}) has no structured record."
         evidence = self.evidence.add(
-            "record", record, key=("record", external_id), paper_id=external_id, paper_title=title
+            "record",
+            paper.record,
+            key=("record", paper.paper_id),
+            paper_id=paper.paper_id,
+            paper_title=paper.title,
         )
-        return f"[{evidence.id}] {_clip(record, 1200)}"
+        return f"[{evidence.id}] {_clip(paper.record, 1200)}"
 
     def papers_using(self, args: dict[str, Any]) -> str:
         """Papers whose structured record lists a method or dataset."""
@@ -193,41 +182,19 @@ class ProjectTools:
             field = "methods"
         if not term:
             return "papers_using needs a term."
-        pattern = f"%{term.lower()}%"
-        with session_scope() as session:
-            rows = session.execute(
-                select(Paper.external_id, Paper.title, OntologyTerm.original_text)
-                .join(
-                    OntologyTerm,
-                    (OntologyTerm.paper_external_id == Paper.external_id)
-                    & (OntologyTerm.project_id == Paper.project_id),
-                )
-                .where(
-                    Paper.project_id == self.project_id,
-                    OntologyTerm.parameter == field,
-                    func.lower(OntologyTerm.canonical_term).like(pattern)
-                    | func.lower(OntologyTerm.original_text).like(pattern),
-                )
-                .order_by(Paper.id)
-            ).all()
-
-        matched: dict[str, tuple[str, list[str]]] = {}
-        for external_id, title, original in rows:
-            entry = matched.setdefault(external_id, (title, []))
-            if original and original not in entry[1]:
-                entry[1].append(original)
-        if not matched:
+        papers = self.data.papers_using(term, field)
+        if not papers:
             return f"No paper lists {term!r} among its {field}."
 
         lines = []
-        for external_id, (title, surface_forms) in matched.items():
-            fact = f"{title} lists among its {field}: {'; '.join(surface_forms) or term}"
+        for paper in papers:
+            fact = f"{paper['title']} lists among its {field}: {'; '.join(paper['matches']) or term}"
             evidence = self.evidence.add(
                 "record",
                 fact,
-                key=("uses", field, term.lower(), external_id),
-                paper_id=external_id,
-                paper_title=title,
+                key=("uses", field, term.lower(), paper["paper_id"]),
+                paper_id=paper["paper_id"],
+                paper_title=paper["title"],
             )
             lines.append(f"[{evidence.id}] {fact}")
         return "\n".join(lines)
@@ -235,51 +202,33 @@ class ProjectTools:
     def research_gaps(self, args: dict[str, Any]) -> str:
         """Gaps the symbolic gap finder detects across the project's papers."""
         gap_type = str(args.get("gap_type") or "").strip()
-        top = _as_int(args.get("top"), 6, low=1, high=12)
-        with session_scope() as session:
-            rows = session.execute(
-                select(Paper.external_id, Paper.normalized).where(
-                    Paper.project_id == self.project_id, Paper.is_processed.is_(True)
-                )
-            ).all()
-        gaps = find_gaps(
-            to_gap_finder_papers(
-                [{"paper_id": external_id, "normalized": normalized or {}} for external_id, normalized in rows]
-            )
-        )
-        if gap_type:
-            gaps = [gap for gap in gaps if gap["gap_type"] == gap_type]
+        if gap_type not in GAP_TYPES:
+            gap_type = ""
+        gaps = self.data.gaps(gap_type or None, _as_int(args.get("top"), 6, low=1, high=12))
         if not gaps:
             return "The gap finder found no gaps" + (f" of type {gap_type}." if gap_type else ".")
 
         lines = []
-        for gap in gaps[:top]:
-            fact = _describe_gap(gap)
-            evidence = self.evidence.add("gap", fact, key=("gap", fact))
-            lines.append(f"[{evidence.id}] {fact}")
+        for gap in gaps:
+            evidence = self.evidence.add("gap", gap["description"], key=("gap", gap["description"]))
+            lines.append(f"[{evidence.id}] {gap['description']}")
         return "\n".join(lines)
 
     def citation_stats(self, args: dict[str, Any]) -> str:
         """The works this project's papers cite most."""
-        top = _as_int(args.get("top"), 5, low=1, high=15)
-        with session_scope() as session:
-            citing = func.count(Citation.source_paper_id).label("citing")
-            rows = session.execute(
-                select(Paper.external_id, Paper.title, citing)
-                .join(Citation, Citation.target_paper_id == Paper.id)
-                .where(Citation.project_id == self.project_id)
-                .group_by(Paper.id, Paper.external_id, Paper.title)
-                .order_by(citing.desc(), Paper.title)
-                .limit(top)
-            ).all()
-        if not rows:
+        cited = self.data.most_cited(_as_int(args.get("top"), 5, low=1, high=15))
+        if not cited:
             return "No citations are recorded for this project."
 
         lines = []
-        for external_id, title, count in rows:
-            fact = f"{title!r} is cited by {count} of the project's papers"
+        for work in cited:
+            fact = f"{work['title']!r} is cited by {work['cited_by']} of the project's papers"
             evidence = self.evidence.add(
-                "citation", fact, key=("cited", external_id), paper_id=external_id, paper_title=title
+                "citation",
+                fact,
+                key=("cited", work["paper_id"]),
+                paper_id=work["paper_id"],
+                paper_title=work["title"],
             )
             lines.append(f"[{evidence.id}] {fact}")
         return "\n".join(lines)
@@ -312,7 +261,7 @@ class ProjectTools:
                     "research_gaps",
                     "Research gaps found by comparing the papers' methods, datasets, limitations and future work.",
                     {
-                        "gap_type": "optional: method_transfer, dataset_transfer, limitation_gap or future_work_gap",
+                        "gap_type": "optional: " + ", ".join(GAP_TYPES),
                         "top": "gaps to return, 1-12",
                     },
                     self.research_gaps,
@@ -325,20 +274,3 @@ class ProjectTools:
                 ),
             )
         }
-
-
-def _describe_gap(gap: dict[str, Any]) -> str:
-    """One gap from the finder as a sentence a model can reason over."""
-    kind = gap["gap_type"]
-    problem = gap.get("problem") or "this problem"
-    if kind == "method_transfer":
-        sentence = f"Method {gap['method']} has not been tried on dataset {gap['dataset']} for {problem}"
-    elif kind == "dataset_transfer":
-        sentence = f"Dataset {gap['dataset']} has not been used with method {gap['method']} for {problem}"
-    elif kind == "limitation_gap":
-        sentence = f"Limitation {gap['limitation']} recurs across papers on {problem}"
-    elif kind == "future_work_gap":
-        sentence = f"Future work {gap['future_work']} is proposed for {problem} but no paper does it"
-    else:
-        sentence = f"{kind} gap for {problem}"
-    return f"{sentence} (gap type {kind}, score {gap.get('score', 0)})"
