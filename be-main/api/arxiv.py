@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import random
-import re
 import time
 from collections.abc import Callable
 from typing import Any
@@ -23,6 +22,7 @@ import numpy as np
 
 from core import OpenRouterClient, ReferenceParameterExtractorFallback
 from telemetry import llm_stage
+from utils.sections import REFERENCE_HEADING
 
 # Configure logging
 logging.basicConfig(
@@ -65,10 +65,6 @@ ARXIV_SEARCH_MAX_ATTEMPTS = 4
 # there too, just against a tighter timeout. A long bibliography is truncated
 # rather than lost outright.
 REFERENCES_MAX_CHARS = 8_000
-_REFERENCE_HEADING = re.compile(
-    r"^\s*\*{0,2}(?:\d+\.?\s*)?(references|bibliography|works\s+cited|literature\s+cited)\*{0,2}\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
 
 
 def _arxiv_transient_error(exc: BaseException) -> bool:
@@ -156,7 +152,7 @@ class ArxivClient:
         of the document when no heading is found, and is capped either way so a
         malformed paper cannot hand the model an unbounded prompt.
         """
-        matches = list(_REFERENCE_HEADING.finditer(text))
+        matches = list(REFERENCE_HEADING.finditer(text))
         section = text[matches[-1].end():] if matches else text[-REFERENCES_MAX_CHARS:]
         return section[:REFERENCES_MAX_CHARS].strip()
 
