@@ -27,8 +27,44 @@ from constants.prompts.extractor_system_prompt import EXTRACTOR_SYSTEM_PROMPT
 from constants.prompts.normalizer_system_prompt import NORMALIZER_SYSTEM_PROMPT
 from constants.response_formats.canonical_default import CANONICAL_DEFAULT_RESPONSE_FORMAT
 from constants.response_formats.extractor_default import EXTRACTOR_DEFAULT_RESPONSE_FORMAT
+from telemetry import LLMCall, llm_stage, track_llm_call
 
 logger = logging.getLogger(__name__)
+
+
+def _prompt_chars(messages: list[dict[str, str]]) -> int:
+    return sum(len(m.get("content") or "") for m in messages)
+
+
+def _record_gemini_usage(call: LLMCall, parsed: dict) -> None:
+    usage = parsed.get("usageMetadata") or {}
+    if "promptTokenCount" in usage:
+        call.input_tokens = usage["promptTokenCount"]
+    if "candidatesTokenCount" in usage or "thoughtsTokenCount" in usage:
+        # Thinking tokens are billed at the output rate, so they count as
+        # output here even though they never reach the response text.
+        call.output_tokens = usage.get("candidatesTokenCount", 0) + usage.get(
+            "thoughtsTokenCount", 0
+        )
+
+
+def _record_ollama_usage(call: LLMCall, parsed: dict) -> None:
+    if "prompt_eval_count" in parsed:
+        call.input_tokens = parsed["prompt_eval_count"]
+    if "eval_count" in parsed:
+        call.output_tokens = parsed["eval_count"]
+    if parsed.get("eval_duration"):
+        # Nanoseconds of pure decoding — the model's own speed, without the
+        # model load or prompt processing that the request latency includes.
+        call.generation_ms = parsed["eval_duration"] / 1_000_000
+
+
+def _record_openai_usage(call: LLMCall, parsed: dict) -> None:
+    usage = parsed.get("usage") or {}
+    if "prompt_tokens" in usage:
+        call.input_tokens = usage["prompt_tokens"]
+    if "completion_tokens" in usage:
+        call.output_tokens = usage["completion_tokens"]
 
 
 def _strip_unsupported_schema_keys(schema):
@@ -162,11 +198,18 @@ class GeminiClient:
                 gen_config["responseMimeType"] = "application/json"
         body["generationConfig"] = gen_config
 
+        prompt_chars = _prompt_chars(messages)
         last_err: Exception | None = None
         for model in self.model_chain:
             url = f"{self.base_url}/models/{model}:generateContent?key={self.api_key}"
             try:
-                parsed = self._post(url, body)
+                # Each model attempt is its own call: a quota-exhausted model
+                # still cost a round trip, and the fallback is worth seeing.
+                with track_llm_call("gemini", model, "chat", prompt_chars=prompt_chars) as call:
+                    parsed = self._post(url, body)
+                    _record_gemini_usage(call, parsed)
+                    text = self._response_text(parsed)
+                    call.response_chars = len(text)
             except RuntimeError as exc:
                 msg = str(exc)
                 # If we're out of daily quota for THIS model, try the next one.
@@ -178,21 +221,25 @@ class GeminiClient:
                     last_err = exc
                     continue
                 raise
-            try:
-                candidates = parsed.get("candidates") or []
-                if not candidates:
-                    raise ValueError(f"Gemini returned no candidates: {parsed}")
-                parts = candidates[0].get("content", {}).get("parts", [])
-                text = "".join(p.get("text", "") for p in parts).strip()
-                if not text:
-                    raise ValueError(f"Empty content in Gemini response: {parsed}")
-                if model != self.model_chain[0]:
-                    logger.info(f"Used Gemini fallback model: {model}")
-                return text
-            except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
-                raise ValueError(f"Unexpected Gemini response: {parsed}") from exc
+            if model != self.model_chain[0]:
+                logger.info(f"Used Gemini fallback model: {model}")
+            return text
 
         raise last_err or RuntimeError("Gemini chat_completion: all models exhausted")
+
+    @staticmethod
+    def _response_text(parsed: dict) -> str:
+        try:
+            candidates = parsed.get("candidates") or []
+            if not candidates:
+                raise ValueError(f"Gemini returned no candidates: {parsed}")
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts).strip()
+        except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
+            raise ValueError(f"Unexpected Gemini response: {parsed}") from exc
+        if not text:
+            raise ValueError(f"Empty content in Gemini response: {parsed}")
+        return text
 
     # Gemini's batchEmbedContents accepts at most 100 texts per request.
     GEMINI_BATCH_EMBED_LIMIT = 100
@@ -244,7 +291,12 @@ class GeminiClient:
                 f"Gemini embeddings batch {offset // self.GEMINI_BATCH_EMBED_LIMIT + 1}: "
                 f"{len(batch)} texts (offset {offset})"
             )
-            parsed = self._post(url, body)
+            # batchEmbedContents reports no token usage, so these counts are
+            # estimated from length and flagged as such.
+            with track_llm_call(
+                "gemini", embed_model, "embeddings", prompt_chars=sum(len(t) for t in batch)
+            ):
+                parsed = self._post(url, body)
             try:
                 all_embeddings.extend(item["values"] for item in parsed["embeddings"])
             except (KeyError, IndexError) as exc:
@@ -335,17 +387,22 @@ class OllamaClient:
         if fmt is not None:
             body["format"] = fmt
 
-        parsed = self._post("/api/chat", body)
-        content = (parsed.get("message") or {}).get("content", "") or ""
-        content = _strip_reasoning(content).strip()
-        # Strip markdown code fences some models wrap JSON in.
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-        if not content:
-            raise ValueError(f"Empty content in Ollama response: {parsed}")
+        with track_llm_call(
+            "ollama", self.model, "chat", prompt_chars=_prompt_chars(messages)
+        ) as call:
+            parsed = self._post("/api/chat", body)
+            _record_ollama_usage(call, parsed)
+            content = (parsed.get("message") or {}).get("content", "") or ""
+            content = _strip_reasoning(content).strip()
+            # Strip markdown code fences some models wrap JSON in.
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+            call.response_chars = len(content)
+            if not content:
+                raise ValueError(f"Empty content in Ollama response: {parsed}")
         return content
 
     def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
@@ -357,16 +414,28 @@ class OllamaClient:
         logger.info(f"Ollama embeddings: {len(texts)} texts via {self.embed_model}")
         # Newer Ollama supports batch input on /api/embed.
         try:
-            parsed = self._post("/api/embed", {"model": self.embed_model, "input": texts})
+            with track_llm_call(
+                "ollama",
+                self.embed_model,
+                "embeddings",
+                prompt_chars=sum(len(t) for t in texts),
+            ) as call:
+                parsed = self._post("/api/embed", {"model": self.embed_model, "input": texts})
+                if "prompt_eval_count" in parsed:
+                    call.input_tokens = parsed["prompt_eval_count"]
             embs = parsed.get("embeddings")
             if embs:
                 return embs
         except RuntimeError as exc:
             logger.warning(f"/api/embed failed ({exc}); falling back to /api/embeddings")
-        # Fallback: one request per text on the legacy endpoint.
+        # Fallback: one request per text on the legacy endpoint, which reports
+        # no usage — those counts are estimated.
         vectors: list[list[float]] = []
         for text in texts:
-            parsed = self._post("/api/embeddings", {"model": self.embed_model, "prompt": text})
+            with track_llm_call(
+                "ollama", self.embed_model, "embeddings", prompt_chars=len(text)
+            ):
+                parsed = self._post("/api/embeddings", {"model": self.embed_model, "prompt": text})
             vectors.append(parsed.get("embedding"))
         return vectors
 
@@ -433,28 +502,33 @@ class OpenRouterClient:
             "X-Title": "Research Gap Discovery Engine MVP",
         }
         request = urllib.request.Request(self.endpoint, data=payload, headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
-                data = response.read().decode("utf-8")
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace").strip()
-            message = detail or exc.reason or "unknown error"
-            raise RuntimeError(f"OpenRouter HTTP {exc.code}: {message}") from exc
-        parsed = json.loads(data)
-        try:
-            content = parsed["choices"][0]["message"]["content"]
-            if content is None or content == "":
-                raise ValueError(f"Empty content in OpenRouter response: {parsed}")
-            # Strip markdown code fences that some OpenRouter models wrap JSON in.
-            stripped = content.strip()
-            if stripped.startswith("```"):
-                stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped[3:]
-                if stripped.endswith("```"):
-                    stripped = stripped[:-3]
-                stripped = stripped.strip()
-            return stripped
-        except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
-            raise ValueError(f"Unexpected OpenRouter response: {parsed}") from exc
+        with track_llm_call(
+            "openrouter", self.model, "chat", prompt_chars=_prompt_chars(messages)
+        ) as call:
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
+                    data = response.read().decode("utf-8")
+            except HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+                message = detail or exc.reason or "unknown error"
+                raise RuntimeError(f"OpenRouter HTTP {exc.code}: {message}") from exc
+            parsed = json.loads(data)
+            _record_openai_usage(call, parsed)
+            try:
+                content = parsed["choices"][0]["message"]["content"]
+                if content is None or content == "":
+                    raise ValueError(f"Empty content in OpenRouter response: {parsed}")
+                # Strip markdown code fences that some OpenRouter models wrap JSON in.
+                stripped = content.strip()
+                if stripped.startswith("```"):
+                    stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped[3:]
+                    if stripped.endswith("```"):
+                        stripped = stripped[:-3]
+                    stripped = stripped.strip()
+                call.response_chars = len(stripped)
+                return stripped
+            except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
+                raise ValueError(f"Unexpected OpenRouter response: {parsed}") from exc
     
     def get_embeddings(self, texts: list[str], model: str = "sentence-transformers/all-minilm-l12-v2") -> list[list[float]]:
         """
@@ -493,19 +567,23 @@ class OpenRouterClient:
         request = urllib.request.Request(self.embedding_endpoint, data=payload, headers=headers)
         
         logger.info(f"Sending embedding request to {self.embedding_endpoint}")
-        
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
-                data = response.read().decode("utf-8")
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace").strip()
-            message = detail or exc.reason or "unknown error"
-            logger.error(f"OpenRouter Embeddings HTTP error {exc.code}: {message}")
-            logger.error(f"Request payload size: {len(payload)} bytes, texts count: {len(texts)}")
-            raise RuntimeError(f"OpenRouter Embeddings HTTP {exc.code}: {message}") from exc
-        
-        parsed = json.loads(data)
-        
+
+        with track_llm_call(
+            "openrouter", model, "embeddings", prompt_chars=sum(text_lengths)
+        ) as call:
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
+                    data = response.read().decode("utf-8")
+            except HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+                message = detail or exc.reason or "unknown error"
+                logger.error(f"OpenRouter Embeddings HTTP error {exc.code}: {message}")
+                logger.error(f"Request payload size: {len(payload)} bytes, texts count: {len(texts)}")
+                raise RuntimeError(f"OpenRouter Embeddings HTTP {exc.code}: {message}") from exc
+
+            parsed = json.loads(data)
+            _record_openai_usage(call, parsed)
+
         try:
             # Extract embeddings from the response
             embeddings = [item["embedding"] for item in parsed["data"]]
@@ -549,6 +627,7 @@ class ReferenceParameterExtractorFallback:
     def extract(self, reference: list[str]) -> ExtractedReferenceResponse:
         return self._extract_with_llm(reference)
 
+    @llm_stage("reference_extraction")
     def _extract_with_llm(self, reference: list[str]) -> ExtractedReferenceResponse:
         """Extract using the configured LLM client."""
         messages = [
@@ -626,6 +705,7 @@ class PDFExtractor:
         """
         return EXTRACTOR_DEFAULT_RESPONSE_FORMAT
 
+    @llm_stage("extraction")
     def extract_from_raw_text(self, text: str) -> str:
         messages = [
             {
@@ -645,6 +725,7 @@ class PDFExtractor:
         response = self.client.chat_completion(messages, response_format=self.parameters_schema)
         return response
     
+    @llm_stage("normalization")
     def normalize_extracted_parameters(
         self, extracted_response: dict, existing_ontology: dict | None = None
     ):
