@@ -30,11 +30,14 @@ Given a research prompt (e.g. *"diffusion models for pose transfer"*) the pipeli
    extraction → normalization → ontology-mapping pipeline to produce a canonical
    record per paper (problem, methods, datasets, limitations, future work).
 4. **Builds a graph** — assembles a citation + authorship reference graph.
-5. **Finds gaps** — a symbolic [`GapFinder`](be-main/gap_finder.py) detects
+5. **Indexes for retrieval** — splits each paper's full text into
+   section-labelled passages, renders its structured record as one more, embeds
+   them all and stores them beside the papers (pgvector on Postgres).
+6. **Finds gaps** — a symbolic [`GapFinder`](be-main/gap_finder.py) detects
    method-transfer, dataset-transfer, limitation-pressure, and unmet future-work
    gaps, then uses the LLM purely to *verbalize* them into suggested papers.
-6. **Analyzes trends** — produces chart-ready trend and dataset summaries.
-7. **Writes reviews** — on request, generates a cited literature review in LaTeX
+7. **Analyzes trends** — produces chart-ready trend and dataset summaries.
+8. **Writes reviews** — on request, generates a cited literature review in LaTeX
    and compiles it to PDF.
 
 Progress is streamed to the frontend over Server-Sent Events (SSE).
@@ -57,7 +60,7 @@ Each subproject has its own README with details:
 | Layer     | Technologies                                                                       |
 |-----------|------------------------------------------------------------------------------------|
 | Backend   | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX     |
-| Data      | Postgres / SQLite, SQLAlchemy 2, Alembic                                            |
+| Data      | Postgres + pgvector / SQLite, SQLAlchemy 2, Alembic                                 |
 | Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
 | AI        | Gemini · OpenRouter · Ollama (local) — chat + embeddings                            |
 | Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |

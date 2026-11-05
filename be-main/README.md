@@ -66,6 +66,14 @@ be-main/
 │   ├── api.py           Route handlers and SSE streaming pipelines
 │   ├── arxiv.py         arXiv search/download/extract + topic generation
 │   └── review.py        Literature-review generation (ReviewManager)
+├── retrieval/
+│   ├── chunking.py      Section-aware passages + a structured profile per paper
+│   ├── embedder.py      Batched embeddings with document/query task hints
+│   ├── store.py         Chunk storage; exact search via pgvector or numpy
+│   └── indexer.py       Paper → embedded, stored chunks
+├── telemetry/           Per-call LLM metering, pricing, rollups, trace export
+├── scripts/
+│   └── index_project.py Index projects processed before retrieval existed
 ├── utils/
 │   ├── embeddings.py    Cosine similarity, chunking, relevance ranking, dedup
 │   ├── graph.py         Trend/chart data generation (TrendsCreator)
@@ -86,8 +94,16 @@ be-main/
 2. Search arXiv per topic, optionally reranking by embedding similarity.
 3. For each paper: extract → normalize → map to the ontology.
 4. Build the citation + authorship graph.
-5. Generate trend analyses and a dataset summary.
-6. Run the gap finder and verbalize the top gaps into suggested papers.
+5. Index each paper's passages and structured record for retrieval.
+6. Generate trend analyses and a dataset summary.
+7. Run the gap finder and verbalize the top gaps into suggested papers.
+
+Projects processed before retrieval existed can be indexed after the fact,
+from the PDFs a run leaves in `data/tmp`:
+
+```bash
+python scripts/index_project.py --all          # or name project ids
+```
 
 ## Tests
 
