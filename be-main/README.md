@@ -58,6 +58,7 @@ All configuration is via environment variables (loaded from `.env`). See
 | POST   | `/api/projects/{project_id}/assistant` | Multi-agent assistant turn (SSE) |
 | GET    | `/api/projects/{project_id}/threads` | A project's conversations     |
 | GET    | `/api/threads/{thread_id}`           | One conversation              |
+| POST   | `/mcp/` | MCP server (streamable HTTP), when `MCP_API_KEY` is set |
 
 ## Project structure
 
@@ -72,7 +73,9 @@ be-main/
 │   ├── api.py           Route handlers and SSE streaming pipelines
 │   ├── arxiv.py         arXiv search/download/extract + topic generation
 │   └── review.py        Literature-review generation (ReviewManager)
+├── mcp_server/           The corpus tools over MCP: stdio (python -m mcp_server) and HTTP
 ├── agents/
+│   ├── data.py          Structured reads of a project, shared with the MCP server
 │   ├── tools.py         Evidence-recording tools: passages, records, gaps, citations
 │   ├── react.py         Schema-constrained ReAct loop for one specialist
 │   └── graph.py         LangGraph: supervisor → specialists → writer → critic

@@ -159,6 +159,49 @@ ollama pull nomic-embed-text
 
 See [`be-main/.env.example`](be-main/.env.example) for every option.
 
+## Use it from any agent (MCP)
+
+The corpus tools — find a run, search its papers, ask a grounded question,
+read a paper's structured record, list research gaps, see what the papers
+cite — are also an [MCP](https://modelcontextprotocol.io) server, so Claude,
+an IDE assistant or an agent built on Google's ADK can use them directly.
+Every tool is read-only.
+
+**Locally, over stdio** (Claude Code shown; any MCP client takes the same
+command):
+
+```bash
+claude mcp add research-it -e PYTHONPATH="$PWD/be-main" -- \
+  "$PWD/be-main/.venv/bin/python" -m mcp_server
+```
+
+**Over HTTP**, on the API at `/mcp/`, when `MCP_API_KEY` is set — clients
+send it as a bearer token, and without it nothing is mounted:
+
+```bash
+claude mcp add --transport http research-it http://127.0.0.1:8000/mcp/ \
+  --header "Authorization: Bearer $MCP_API_KEY"
+```
+
+or from Google's Agent Development Kit:
+
+```python
+from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
+
+agent = LlmAgent(
+    model="gemini-2.5-flash",
+    name="research_analyst",
+    instruction="Answer questions about research runs with the Research.it tools.",
+    tools=[McpToolset(connection_params=StreamableHTTPConnectionParams(
+        url="https://your-api/mcp/", headers={"Authorization": f"Bearer {token}"}))],
+)
+```
+
+[`be-main/examples/adk_agent.py`](be-main/examples/adk_agent.py) is that agent,
+runnable — checked against ADK 2.13 on a local model, where it found the
+right run, searched it and answered naming the paper.
+
 ## API endpoints
 
 | Method | Path                          | Purpose                              |
@@ -180,6 +223,7 @@ See [`be-main/.env.example`](be-main/.env.example) for every option.
 | POST   | `/api/projects/{project_id}/assistant` | Multi-agent assistant turn (SSE) |
 | GET    | `/api/projects/{project_id}/threads` | A project's conversations     |
 | GET    | `/api/threads/{thread_id}`           | One conversation              |
+| POST   | `/mcp/` | MCP server (streamable HTTP), when `MCP_API_KEY` is set |
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` once the
 backend is running.
