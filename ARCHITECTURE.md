@@ -209,6 +209,24 @@ passage in that paper was labelled with the wrong section and its references
 were being indexed. Dotted section numbers are now rejoined to the line after
 them — dotted only, since a bare "4" is usually a page number.
 
+### Answers cite a passage or decline
+
+`POST /api/projects/{id}/ask` ([`services/rag.py`](be-main/services/rag.py))
+hands the model eight retrieved passages under ids `S1`–`S8` and accepts an
+answer in one of two shapes: statements each citing a passage, or an explicit
+"the sources do not say". The response marks an answer that is neither as
+`grounded: false` rather than passing it off.
+
+Citations use `[S1]`, not `[1]`, because papers are full of their own
+bracketed reference numbers; a model that copies "[13]" out of a passage would
+otherwise cite a source it was never given — or, worse, one it was. Every
+citation is checked against the ids actually supplied, and one that points
+nowhere is removed from the answer and reported in `dropped_citations`.
+
+A project with nothing indexed is refused before any model call. The live
+check against a real corpus refused the one question its papers could not
+answer, and still cited the passage that said what the papers did use.
+
 ### Authors are scoped per project
 
 Author names in bibliographies are not reliable identity. A global author table
@@ -232,11 +250,12 @@ be-main/
 │   ├── research_pipeline.py   Stage orchestration
 │   ├── jobs.py            Background execution and event tailing
 │   ├── gaps.py            Gap analysis → suggested papers
+│   ├── rag.py             Grounded answers with checked citations
 │   └── artifacts.py       On-disk run output
 ├── db/                Models, repositories, session, bootstrap
 ├── utils/             LaTeX, embeddings, charts, path containment
 ├── telemetry/         LLM metering, pricing, rollups, trace export
-├── retrieval/         Chunking, embeddings, pgvector search, indexing
+├── retrieval/         Chunking, embeddings, BM25 + pgvector hybrid search, indexing
 ├── evals/             Gap detection benchmark
 └── alembic/           Migrations
 
@@ -265,6 +284,9 @@ Stated plainly, because a reviewer will find them anyway:
   is N×, until `RATE_LIMIT_STORAGE_URI` points at Redis.
 - **Gap detection recall is 0.188** at the shipped output cap. Measured, with
   the trade-off curve in [`evals/README.md`](be-main/evals/README.md).
+- **Grounding is checked structurally, not semantically.** A citation must
+  point at a passage the model was given; nothing yet checks that the passage
+  supports the sentence citing it.
 - **Section detection is heuristic.** A heading wrapped over two lines keeps
   only its first, and run-in headings (a bold phrase opening a paragraph) are
   not found at all; those passages carry the enclosing section's name.
