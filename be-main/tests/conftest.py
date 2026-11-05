@@ -6,12 +6,14 @@ tests and the suite still needs no services installed.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -64,3 +66,55 @@ def session(engine) -> Session:
     factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
     with factory() as session:
         yield session
+
+
+# Postgres-specific code (pgvector search) is tested against a real server
+# when one is named here; CI provides it, a local run without it skips those
+# cases. Never the app's own DATABASE_URL — the suite drops what it creates.
+TEST_POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL")
+
+
+@pytest.fixture(scope="session")
+def postgres_engine():
+    if not TEST_POSTGRES_URL:
+        pytest.skip("TEST_POSTGRES_URL is not set")
+    engine = create_engine(TEST_POSTGRES_URL, future=True)
+    if "test" not in (engine.url.database or ""):
+        pytest.fail(
+            f"refusing to run destructive tests against database {engine.url.database!r}; "
+            "TEST_POSTGRES_URL must name a database with 'test' in it"
+        )
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    Base.metadata.create_all(engine)
+    yield engine
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def db_session(request) -> Session:
+    """A session on each supported database in turn.
+
+    The Postgres one runs inside a transaction that is rolled back afterwards,
+    so tests sharing the server never see each other's rows.
+    """
+    if request.param == "sqlite":
+        factory = sessionmaker(
+            bind=request.getfixturevalue("engine"), expire_on_commit=False, future=True
+        )
+        with factory() as session:
+            yield session
+        return
+
+    connection = request.getfixturevalue("postgres_engine").connect()
+    transaction = connection.begin()
+    session = Session(
+        bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
+    )
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
