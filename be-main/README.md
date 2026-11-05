@@ -55,6 +55,9 @@ All configuration is via environment variables (loaded from `.env`). See
 | GET    | `/api/projects/{project_id}/index`  | Whether a project is searchable |
 | GET    | `/api/projects/{project_id}/search` | Hybrid passage search (no LLM)  |
 | POST   | `/api/projects/{project_id}/ask`    | Grounded answer with citations  |
+| POST   | `/api/projects/{project_id}/assistant` | Multi-agent assistant turn (SSE) |
+| GET    | `/api/projects/{project_id}/threads` | A project's conversations     |
+| GET    | `/api/threads/{thread_id}`           | One conversation              |
 
 ## Project structure
 
@@ -69,6 +72,10 @@ be-main/
 │   ├── api.py           Route handlers and SSE streaming pipelines
 │   ├── arxiv.py         arXiv search/download/extract + topic generation
 │   └── review.py        Literature-review generation (ReviewManager)
+├── agents/
+│   ├── tools.py         Evidence-recording tools: passages, records, gaps, citations
+│   ├── react.py         Schema-constrained ReAct loop for one specialist
+│   └── graph.py         LangGraph: supervisor → specialists → writer → critic
 ├── retrieval/
 │   ├── chunking.py      Section-aware passages + a structured profile per paper
 │   ├── embedder.py      Batched embeddings with document/query task hints

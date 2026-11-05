@@ -47,6 +47,15 @@ Once a run is indexed its papers can be questioned directly.
 cites each claim to the passage behind it, and says so when the papers do not
 contain the answer.
 
+For questions that cross the system's parts — "which open gaps involve
+datasets nobody here has used?" — a **multi-agent research assistant**
+(`POST /api/projects/{project_id}/assistant`, built on LangGraph) delegates to
+specialists for the literature, the gap finder and the citation graph, each a
+ReAct loop over its own tools. A writer answers from their evidence and a
+critic checks the answer against it, sending it back once if it falls short.
+Every step streams live, conversations persist per thread, and each turn's
+LLM cost is reported per agent.
+
 ## Repository layout
 
 ```
@@ -68,6 +77,7 @@ Each subproject has its own README with details:
 | Data      | Postgres + pgvector / SQLite, SQLAlchemy 2, Alembic                                 |
 | Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
 | AI        | Gemini · Vertex AI · OpenRouter · Ollama (local) — chat + embeddings                |
+| Agents    | LangGraph multi-agent assistant, ReAct tool use, hybrid RAG (BM25 + pgvector)       |
 | Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
 | Infra     | Docker, Compose, Google Cloud (Cloud Run, Cloud SQL, Terraform, Cloud Build), Fly.io, Vercel |
@@ -167,6 +177,9 @@ See [`be-main/.env.example`](be-main/.env.example) for every option.
 | GET    | `/api/projects/{project_id}/index`  | Whether a project is searchable |
 | GET    | `/api/projects/{project_id}/search` | Hybrid passage search (no LLM)  |
 | POST   | `/api/projects/{project_id}/ask`    | Grounded answer with citations  |
+| POST   | `/api/projects/{project_id}/assistant` | Multi-agent assistant turn (SSE) |
+| GET    | `/api/projects/{project_id}/threads` | A project's conversations     |
+| GET    | `/api/threads/{thread_id}`           | One conversation              |
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` once the
 backend is running.
