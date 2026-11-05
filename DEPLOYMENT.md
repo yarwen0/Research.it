@@ -88,6 +88,8 @@ the `*` default means any site can call your API.
 | `OLLAMA_BASE_URL`          | backend   | `http://localhost:11434` | Local model server                         |
 | `CORS_ORIGINS`             | backend   | `*`                      | Comma-separated allowed browser origins    |
 | `HOST` / `PORT`            | backend   | `0.0.0.0` / `8000`       | Bind address                               |
+| `OTEL_TRACES_EXPORTER`     | backend   | `none`                   | `console` or `otlp` to export trace spans  |
+| `LLM_PRICES`               | backend   | built-in table           | JSON price overrides for cost estimates    |
 | `NEXT_PUBLIC_API_URL`      | frontend  | `http://127.0.0.1:8000`  | Backend URL, inlined at build time         |
 | `NEXT_PUBLIC_SITE_URL`     | frontend  | —                        | Canonical URL for Open Graph metadata      |
 | `INSTALL_LATEX`            | build arg | `true`                   | Skip TeX Live for a ~700 MB smaller image  |
