@@ -162,6 +162,10 @@ jobs:
         # Same idea, for tests/test_retrieval_eval.py. Scored from committed
         # embeddings, so no model is needed.
         run: python -m evals.retrieval.run
+      - name: Report prompt-injection screen metrics
+        # Gated in tests/test_screening.py; printed here so held-out recall
+        # and false positives on prose about attacks show up on every PR.
+        run: python -m evals.injection.run
 
   infra:
     name: Google Cloud Terraform validates
