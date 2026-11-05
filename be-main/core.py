@@ -129,6 +129,11 @@ class GeminiClient:
     tier even when one model has burnt through its RPD budget.
     """
 
+    # What telemetry and error messages call this client. VertexAIClient
+    # reuses everything here and overrides these with the two methods below.
+    provider = "gemini"
+    display_name = "Gemini"
+
     # Order matters: cheapest/highest-quota first.
     DEFAULT_FALLBACK_CHAIN: ClassVar[list[str]] = [
         "gemini-2.5-flash-lite",
@@ -154,9 +159,16 @@ class GeminiClient:
         seen = set()
         self.model_chain = [m for m in chain if not (m in seen or seen.add(m))]
 
+    def _headers(self) -> dict[str, str]:
+        # The API key travels in the URL for the Gemini API.
+        return {"Content-Type": "application/json"}
+
+    def _generate_url(self, model: str) -> str:
+        return f"{self.base_url}/models/{model}:generateContent?key={self.api_key}"
+
     def _post(self, url: str, body: dict, *, max_retries: int = 2) -> dict:
         payload = json.dumps(body).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        headers = self._headers()
 
         attempt = 0
         while True:
@@ -175,13 +187,13 @@ class GeminiClient:
                     # retries. Cap so a quota error surfaces in the UI within ~40s.
                     delay = min(20, self._extract_retry_delay(detail) or (2 ** attempt))
                     logger.warning(
-                        f"Gemini HTTP {exc.code} on attempt {attempt}/{max_retries}, "
+                        f"{self.display_name} HTTP {exc.code} on attempt {attempt}/{max_retries}, "
                         f"sleeping {delay}s before retry"
                     )
                     time.sleep(delay)
                     continue
                 message = detail or exc.reason or "unknown error"
-                raise RuntimeError(f"Gemini HTTP {exc.code}: {message}") from exc
+                raise RuntimeError(f"{self.display_name} HTTP {exc.code}: {message}") from exc
 
     @staticmethod
     def _extract_retry_delay(detail: str) -> int | None:
@@ -221,11 +233,11 @@ class GeminiClient:
         prompt_chars = _prompt_chars(messages)
         last_err: Exception | None = None
         for model in self.model_chain:
-            url = f"{self.base_url}/models/{model}:generateContent?key={self.api_key}"
+            url = self._generate_url(model)
             try:
                 # Each model attempt is its own call: a quota-exhausted model
                 # still cost a round trip, and the fallback is worth seeing.
-                with track_llm_call("gemini", model, "chat", prompt_chars=prompt_chars) as call:
+                with track_llm_call(self.provider, model, "chat", prompt_chars=prompt_chars) as call:
                     parsed = self._post(url, body)
                     _record_gemini_usage(call, parsed)
                     text = self._response_text(parsed)
