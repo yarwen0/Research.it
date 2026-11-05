@@ -172,6 +172,27 @@ class TestHttpTransport:
         assert response.status_code == 200
         assert {tool["name"] for tool in response.json()["result"]["tools"]} == TOOLS
 
+    def test_requests_are_rate_limited_per_client(self):
+        # The API's own limiter exempts mounted apps; this gate must not.
+        holder = {}
+
+        @asynccontextmanager
+        async def lifespan(_app):
+            async with holder["sessions"].run():
+                yield
+
+        app = FastAPI(lifespan=lifespan)
+        holder["sessions"] = mount_http(
+            app, TOKEN, rate_limit="2/minute", llm_client_factory=FakeLLMClient
+        )
+        with TestClient(app) as client:
+            statuses = [_post(client, INITIALIZE).status_code for _ in range(3)]
+            guessing = _post(client, INITIALIZE, token="guess")
+        assert statuses == [200, 200, 429]
+        # Token guesses spend the same budget; they get no free attempts.
+        assert guessing.status_code == 429
+        assert int(guessing.headers["retry-after"]) >= 1
+
     def test_nothing_is_mounted_without_a_key(self):
         import main
 
