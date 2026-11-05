@@ -221,7 +221,7 @@ API keys, stored hashed, required on write endpoints and the MCP endpoint when
 | 4. Multi-agent research assistant | Done |
 | 5. MCP server | Done |
 | 6. Google Cloud deployment | Done — validated in CI, not yet applied |
-| 7. Safety and evaluation gates | Planned |
+| 7. Safety and evaluation gates | Done — answer quality is measured on a live model, not gated in CI |
 | 8. Frontend surfaces | Planned |
 | 9. Authentication perimeter | Planned |
 
