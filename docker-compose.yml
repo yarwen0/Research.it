@@ -11,7 +11,8 @@ name: researchit
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # Postgres 16 with pgvector, which retrieval's embeddings column needs.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-researchit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-researchit}
