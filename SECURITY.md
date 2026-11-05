@@ -45,12 +45,22 @@ abstract.
 
 | Guard | What it stops |
 |---|---|
+| Passages that read as instructions to a model are withheld from every prompt and reported; `/search` marks them instead ([`retrieval/screening.py`](be-main/retrieval/screening.py)) | Overrides, role hijacks, prompt exfiltration and hidden reviewer instructions reaching a model at all |
 | Passages fenced in `<source>` tags, with any tag inside them neutralized | Text closing its own fence and posing as instructions |
 | The system prompt states sources are data, not instructions | The model obeying text it was asked to quote |
 | Citations checked against the ids actually supplied | An answer citing evidence that was never retrieved |
 | Structured output (JSON schema) for answers | Free-form text smuggling in fake fields |
 | Every agent prompt states tool results are data | Paper text steering an agent's next tool call |
 | Evidence ids assigned by tools, validated in the final answer | An agent citing evidence no tool returned |
+
+The screen is measured on a labelled set with a held-out split
+([`evals/injection`](be-main/evals/injection/README.md)). It caught 13 of 15
+held-out attacks and flagged none of 20 sentences of ordinary prose or prose
+that discusses and quotes attacks. Not flagging those matters as much as
+catching attacks, because a corpus about LLM security quotes them constantly.
+It is pattern-based, so a phrasing it has no pattern for gets through: the two
+held-out misses are recorded there and deliberately left unfixed, since
+patching them after reading them would only memorize the test set.
 
 This reduces prompt injection; it does not eliminate it. A model can still be
 steered by text in its context, and the answer it writes is shown to a user.
