@@ -217,7 +217,7 @@ API keys, stored hashed, required on write endpoints and the MCP endpoint when
 |---|---|
 | 1. LLM telemetry | Done |
 | 2. Vector store and indexing | Done |
-| 3. Hybrid retrieval and grounded answers | Planned |
+| 3. Hybrid retrieval and grounded answers | Done |
 | 4. Multi-agent research assistant | Planned |
 | 5. MCP server | Planned |
 | 6. Google Cloud deployment | Planned |
