@@ -40,7 +40,7 @@ class TestReferencesSection:
         assert ArxivClient._references_section(text).startswith("[9] Z. Last.")
 
     def test_accepts_numbered_and_uppercase_headings(self):
-        for heading in ("REFERENCES", "7. References", "Works Cited"):
+        for heading in ("REFERENCES", "7. References", "Works Cited", "Bibliographical References"):
             text = f"body\n\n{heading}\n[1] Cited work. 2021."
             assert ArxivClient._references_section(text) == "[1] Cited work. 2021."
 
@@ -56,3 +56,9 @@ class TestReferencesSection:
 
     def test_empty_text_yields_nothing(self):
         assert ArxivClient._references_section("") == ""
+
+    def test_an_lrec_paper_slices_from_its_bibliography(self):
+        # The number on its own line, as PyMuPDF renders LREC's template.
+        # Without the heading recognised, this fell back to the document tail.
+        text = "body\n11.\nBibliographical References\n[1] Main entry. 2021.\n12.\nLanguage Resource References\n[2] Corpus. 2020."
+        assert ArxivClient._references_section(text).startswith("[1] Main entry.")
