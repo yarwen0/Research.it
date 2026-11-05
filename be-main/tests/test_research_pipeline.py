@@ -13,10 +13,12 @@ from typing import ClassVar
 import pytest
 from sqlalchemy import func, select
 
-from db.models import Citation, OntologyTerm, Paper, Project
+from db.models import Chunk, Citation, OntologyTerm, Paper, Project
 from db.session import session_scope
+from retrieval.indexer import PaperIndexer
 from services.events import StatusType
 from services.research_pipeline import ResearchPipeline
+from tests.fakes import HashingEmbedder
 
 
 def _arxiv_paper(paper_id: str, title: str, references=None) -> dict:
@@ -138,6 +140,7 @@ def pipeline(monkeypatch):
         suggestions=None,
         arxiv_client=None,
         topic_generator=None,
+        indexer=None,
         **kwargs,
     ):
         papers_by_topic = papers_by_topic or {
@@ -156,6 +159,7 @@ def pipeline(monkeypatch):
             pipeline.arxiv_client = arxiv
             pipeline.topic_generator = generator
             pipeline.extractor = extractor or StubExtractor()
+            pipeline.indexer = indexer or PaperIndexer(HashingEmbedder())
 
         monkeypatch.setattr(pipeline, "_build_clients", build_clients)
         monkeypatch.setattr(
@@ -342,3 +346,50 @@ class TestFetchProgress:
         p = pipeline(arxiv_client=ProgressReportingArxivClient(papers))
         events = await _collect(p)
         assert events[-1].status == StatusType.COMPLETED
+
+
+@pytest.mark.asyncio
+class TestRetrievalIndexing:
+    """Every processed paper is chunked, embedded and stored for retrieval."""
+
+    async def test_indexes_every_processed_paper(self, pipeline):
+        long_text = " ".join(f"Sentence {i} about diffusion pose estimation." for i in range(60))
+        paper = _arxiv_paper("2301.001", "Paper A")
+        paper["text"] = long_text
+        p = pipeline(papers_by_topic={"topic-a": [paper], "topic-b": []})
+
+        events = await _collect(p)
+
+        summary = events[-1].result["retrieval"]
+        assert summary["indexed_papers"] == 1
+        with session_scope() as session:
+            kinds = session.scalars(
+                select(Chunk.kind).where(Chunk.project_id == p.project_id)
+            ).all()
+        # One structured profile, plus the body split into several passages.
+        assert kinds.count("profile") == 1
+        assert kinds.count("text") > 1
+        assert summary["indexed_chunks"] == len(kinds)
+
+    async def test_full_texts_are_released_once_indexed(self, pipeline):
+        p = pipeline()
+        await _collect(p)
+        assert p._paper_texts == {}
+
+    async def test_full_text_stays_out_of_the_saved_payload(self, pipeline):
+        events = await _collect(pipeline())
+        assert all("text" not in paper for paper in events[-1].result["processed_papers"])
+
+    async def test_a_failing_index_is_reported_once_and_the_run_completes(self, pipeline):
+        class BrokenIndexer:
+            def index_paper(self, *_args):
+                raise RuntimeError("embedding model not pulled")
+
+        events = await _collect(pipeline(indexer=BrokenIndexer()))
+
+        errors = [e for e in events if e.status == StatusType.ERROR]
+        assert len(errors) == 1
+        assert "Indexing failed for 2 of 2 papers" in errors[0].message
+        assert "embedding model not pulled" in errors[0].message
+        assert events[-1].status == StatusType.COMPLETED
+        assert events[-1].result["retrieval"] == {"indexed_papers": 0, "indexed_chunks": 0}
