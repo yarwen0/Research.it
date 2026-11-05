@@ -19,6 +19,7 @@ from typing import Any
 
 from agents.data import GAP_TYPES, ProjectData
 from retrieval.embedder import Embedder
+from retrieval.screening import withhold_instructions
 
 # Observations go back into a model's context on every later step; a local
 # 7B model with an 8k window cannot afford whole passages.
@@ -139,8 +140,12 @@ class ProjectTools:
         query = str(args.get("query") or "").strip()
         if not query:
             return "search_passages needs a query."
+        hits, withheld = withhold_instructions(
+            self.data.passages(query, _as_int(args.get("top"), 5, low=1, high=8)),
+            lambda hit: hit.text,
+        )
         lines = []
-        for hit in self.data.passages(query, _as_int(args.get("top"), 5, low=1, high=8)):
+        for hit in hits:
             evidence = self.evidence.add(
                 "passage",
                 hit.text,
@@ -152,6 +157,13 @@ class ProjectTools:
             lines.append(
                 f"[{evidence.id}] {hit.paper_title} — {hit.section or 'untitled section'}: "
                 f"{_clip(hit.text)}"
+            )
+        if withheld:
+            # Said plainly, so the model knows the gap is deliberate and does
+            # not search again for what it was not shown.
+            lines.append(
+                f"({len(withheld)} matching passage{'s' if len(withheld) > 1 else ''} withheld: "
+                "they read as instructions to a model, not research text.)"
             )
         return "\n".join(lines) or f"No passages matched {query!r}."
 
