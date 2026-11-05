@@ -67,10 +67,10 @@ Each subproject has its own README with details:
 | Backend   | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX     |
 | Data      | Postgres + pgvector / SQLite, SQLAlchemy 2, Alembic                                 |
 | Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
-| AI        | Gemini · OpenRouter · Ollama (local) — chat + embeddings                            |
+| AI        | Gemini · Vertex AI · OpenRouter · Ollama (local) — chat + embeddings                |
 | Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
-| Infra     | Docker, Docker Compose, Fly.io (API), Vercel (web)                                  |
+| Infra     | Docker, Compose, Google Cloud (Cloud Run, Cloud SQL, Terraform, Cloud Build), Fly.io, Vercel |
 
 ## Documentation
 
@@ -97,7 +97,8 @@ Frontend on <http://localhost:3000>, API docs on <http://localhost:8000/docs>.
 Don't want to sign up for a key? Set `LLM_PROVIDER=ollama` in `.env` and run
 `docker compose --profile local-llm up --build` to pull local models instead.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups (Fly.io + Vercel).
+See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups: Google Cloud (Cloud Run,
+Cloud SQL, Vertex AI) with Terraform, or Fly.io + Vercel.
 
 ### Native
 
@@ -136,6 +137,7 @@ The backend runs against one of three providers, selected with `LLM_PROVIDER`:
 | `gemini`     | `GEMINI_API_KEY`  | Default when a Gemini key is present.             |
 | `openrouter` | `OPENROUTER_API_KEY` | Access to many hosted models.                  |
 | `ollama`     | none              | Fully local, no rate limits. Requires Ollama.     |
+| `vertex`     | none (ADC)        | Gemini on Google Cloud, as a service identity.     |
 
 For local, no-API-key runs:
 
