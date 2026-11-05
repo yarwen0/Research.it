@@ -7,8 +7,10 @@ gets an explicit refusal rather than general knowledge decorated with
 citations, and a corpus that was never indexed is refused without calling the
 model at all.
 
-Retrieved text is untrusted — it is extracted from PDFs anyone can publish —
-so it is fenced as data and the prompt says so.
+Retrieved text is untrusted — it is extracted from PDFs anyone can publish.
+A passage that reads as instructions to a model is withheld from the prompt
+and reported (`retrieval.screening`); the rest is fenced as data, and the
+prompt says so.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from typing import Any
 from db.session import session_scope
 from retrieval.embedder import Embedder
 from retrieval.hybrid import HybridRetriever, RetrievedChunk
+from retrieval.screening import Screening, withhold_instructions
 from retrieval.store import ChunkStore
 from telemetry import collect_usage, llm_stage, rollup
 
@@ -107,6 +110,8 @@ class GroundedAnswer:
     sources: list[Source]
     cited: list[str]  # source ids, in order of first citation
     dropped_citations: list[str] = field(default_factory=list)
+    # Retrieved passages kept out of the prompt, and why.
+    withheld: list[tuple[RetrievedChunk, Screening]] = field(default_factory=list)
     strategy: str = "hybrid"
     embedding_model: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
@@ -219,10 +224,29 @@ class CorpusQA:
     def answer(self, project_id: str, question: str) -> GroundedAnswer:
         started = time.perf_counter()
         with collect_usage() as usage:
-            sources = [
-                Source(f"S{position}", chunk)
-                for position, chunk in enumerate(self.retrieve(project_id, question), start=1)
-            ]
+            kept, withheld = withhold_instructions(
+                self.retrieve(project_id, question), lambda chunk: chunk.text
+            )
+            sources = [Source(f"S{position}", chunk) for position, chunk in enumerate(kept, start=1)]
+            if not sources:
+                # Nothing left that is safe to show a model. Declining is
+                # the only answer that does not depend on the withheld text.
+                return GroundedAnswer(
+                    question=question,
+                    answer=(
+                        "Every passage retrieved for this question was withheld: they read "
+                        "as instructions to a model rather than research text."
+                    ),
+                    insufficient_evidence=True,
+                    grounded=True,
+                    sources=[],
+                    cited=[],
+                    withheld=withheld,
+                    strategy=self.strategy,
+                    embedding_model=self.embedder.model_id,
+                    usage=rollup.summarize(call.as_record() for call in usage.calls),
+                    latency_ms=round((time.perf_counter() - started) * 1000, 1),
+                )
             with llm_stage("answer"):
                 raw = self.llm.chat_completion(
                     [
@@ -246,6 +270,7 @@ class CorpusQA:
             sources=sources,
             cited=cited,
             dropped_citations=dropped,
+            withheld=withheld,
             strategy=self.strategy,
             embedding_model=self.embedder.model_id,
             usage=rollup.summarize(call.as_record() for call in usage.calls),
