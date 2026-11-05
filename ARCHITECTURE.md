@@ -223,6 +223,15 @@ otherwise cite a source it was never given — or, worse, one it was. Every
 citation is checked against the ids actually supplied, and one that points
 nowhere is removed from the answer and reported in `dropped_citations`.
 
+The answer's JSON schema also requires a `citations` list, merged with the
+inline markers and validated the same way. Inline markers alone were a
+convention a 7B model treated as optional: on the
+[answer benchmark](be-main/evals/answers/README.md), 38% of answers cited
+nothing. Constrained decoding can enforce a field, so with the list required,
+every answer cited a supplied passage or declined, and the cited passage held
+the evidence for 16 of 18 answerable questions, up from 5. Answers cited 1.4
+of 8 passages on average, so the gain is not a model listing everything.
+
 A project with nothing indexed is refused before any model call. The live
 check against a real corpus refused the one question its papers could not
 answer, and still cited the passage that said what the papers did use.
@@ -406,8 +415,9 @@ Stated plainly, because a reviewer will find them anyway:
   assistant's answers have been checked by hand, on one question run twice.
   On a 7B model its critic is noisy in both directions.
 - **Grounding is checked structurally, not semantically.** A citation must
-  point at a passage the model was given; nothing yet checks that the passage
-  supports the sentence citing it.
+  point at a passage the model was given; nothing at request time checks that
+  the passage supports the sentence citing it. The answer benchmark measures
+  that offline (16 of 18), on 26 questions over three papers with one model.
 - **The injection screen is pattern-based.** It caught 13 of 15 held-out
   attacks; a phrasing it has no pattern for reaches the model, where only the
   layers behind it stand.
