@@ -169,6 +169,46 @@ Each job is its own OpenTelemetry trace — job → paper → stage → LLM call
 `gen_ai.*` attributes — rather than a child of the request that started it,
 since the run outlives that request by minutes.
 
+### Embeddings live beside the papers they describe
+
+Retrieval passages and their vectors are rows in the same database as the
+papers — pgvector's `vector` on Postgres, packed float32 on SQLite — not a
+separate vector service. Deleting a project cascades to its passages, there is
+one datastore to back up and secure, and Cloud SQL ships the extension.
+
+Search is exact, on both databases. Every query is scoped to one project and
+one embedding model: tens of papers, a few thousand passages. Scanning that
+takes milliseconds — 2 to 21 ms over a real 644-passage corpus on SQLite — and
+an approximate index (HNSW) would be built across every project and then
+filtered to one, which is where approximate indexes lose recall.
+
+Each paper yields two kinds of passage
+([`retrieval/chunking.py`](be-main/retrieval/chunking.py)). *Text* passages
+are its full text, split per section on sentence boundaries, with the
+bibliography removed: a run of names and venues resembles every query about a
+field and answers none. One *profile* passage renders the structured
+extraction as prose, keeping each normalized term beside the paper's own
+wording, so "human36m" finds "Human3.6M".
+
+Two details carry most of the retrieval quality, and both are cheap. Passages
+are embedded with their paper title and section in front of them — "our method
+outperforms the baseline" means nothing on its own — while the stored text
+stays as written. And documents and queries go to the embedding model with a
+task hint (Gemini's `taskType`, nomic's `search_document:` / `search_query:`),
+which is how asymmetric retrieval models are trained to be used.
+
+Vectors from two models are not comparable, so rows are keyed by model, and
+retrieval embeddings never take the reranking path's OpenRouter fallback:
+switching providers mid-corpus would mix vector spaces silently. Switching on
+purpose means re-indexing (`scripts/index_project.py`).
+
+Section detection is heuristic, and the first real corpus broke it: PyMuPDF
+prints LREC's "5.2.1." on one line and "Hardware and Sensor Setup" on the
+next, and titles that bibliography "Bibliographical References". Every
+passage in that paper was labelled with the wrong section and its references
+were being indexed. Dotted section numbers are now rejoined to the line after
+them — dotted only, since a bare "4" is usually a page number.
+
 ### Authors are scoped per project
 
 Author names in bibliographies are not reliable identity. A global author table
@@ -196,6 +236,7 @@ be-main/
 ├── db/                Models, repositories, session, bootstrap
 ├── utils/             LaTeX, embeddings, charts, path containment
 ├── telemetry/         LLM metering, pricing, rollups, trace export
+├── retrieval/         Chunking, embeddings, pgvector search, indexing
 ├── evals/             Gap detection benchmark
 └── alembic/           Migrations
 
@@ -224,6 +265,11 @@ Stated plainly, because a reviewer will find them anyway:
   is N×, until `RATE_LIMIT_STORAGE_URI` points at Redis.
 - **Gap detection recall is 0.188** at the shipped output cap. Measured, with
   the trade-off curve in [`evals/README.md`](be-main/evals/README.md).
+- **Section detection is heuristic.** A heading wrapped over two lines keeps
+  only its first, and run-in headings (a bold phrase opening a paragraph) are
+  not found at all; those passages carry the enclosing section's name.
+- **Changing embedding model means re-indexing.** Old vectors stay, unused,
+  until they are deleted.
 - **LLM costs are estimates.** List prices from a dated table, applied to
   free-tier calls too, so they show what a run would cost on the paid tier.
   Gemini embeddings report no token counts and are estimated from length.
