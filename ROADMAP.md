@@ -220,7 +220,7 @@ API keys, stored hashed, required on write endpoints and the MCP endpoint when
 | 3. Hybrid retrieval and grounded answers | Done |
 | 4. Multi-agent research assistant | Planned |
 | 5. MCP server | Planned |
-| 6. Google Cloud deployment | Planned |
+| 6. Google Cloud deployment | Done — validated in CI, not yet applied |
 | 7. Safety and evaluation gates | Planned |
 | 8. Frontend surfaces | Planned |
 | 9. Authentication perimeter | Planned |
