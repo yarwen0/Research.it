@@ -72,6 +72,7 @@ Each subproject has its own README with details:
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Compose, native and hosted setups |
 | [SECURITY.md](SECURITY.md) | Untrusted input surfaces and what constrains them |
 | [be-main/evals/README.md](be-main/evals/README.md) | Gap detection benchmark and results |
+| [ROADMAP.md](ROADMAP.md) | Planned work: telemetry, retrieval, agents, MCP, Google Cloud |
 
 ## Quickstart
 
