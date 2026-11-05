@@ -8,3 +8,4 @@ region     = "us-central1"
 # db_tier             = "db-f1-micro"
 # api_min_instances   = 0
 # extra_cors_origins  = ["https://researchit.example.com"]
+# enable_mcp          = true

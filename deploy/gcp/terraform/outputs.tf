@@ -26,3 +26,8 @@ output "cloud_sql_connection_name" {
 output "data_bucket" {
   value = google_storage_bucket.data.name
 }
+
+output "mcp_url" {
+  description = "The MCP endpoint, when enable_mcp is on. Clients send the token from researchit-mcp-api-key."
+  value       = var.enable_mcp ? "${google_cloud_run_v2_service.api.uri}/mcp/" : null
+}

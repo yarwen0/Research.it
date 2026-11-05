@@ -181,6 +181,41 @@ resource "google_secret_manager_secret_iam_member" "api_reads_database_url" {
   member    = "serviceAccount:${google_service_account.api.email}"
 }
 
+# --- MCP --------------------------------------------------------------------------
+
+# Like the database password: generated per run, never stored, sent only when
+# the secret is first created.
+ephemeral "random_password" "mcp" {
+  count   = var.enable_mcp ? 1 : 0
+  length  = 40
+  special = false
+}
+
+resource "google_secret_manager_secret" "mcp_api_key" {
+  count     = var.enable_mcp ? 1 : 0
+  secret_id = "researchit-mcp-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "mcp_api_key" {
+  count                  = var.enable_mcp ? 1 : 0
+  secret                 = google_secret_manager_secret.mcp_api_key[0].id
+  secret_data_wo         = ephemeral.random_password.mcp[0].result
+  secret_data_wo_version = 1
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_mcp_api_key" {
+  count     = var.enable_mcp ? 1 : 0
+  secret_id = google_secret_manager_secret.mcp_api_key[0].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
 # --- Files ----------------------------------------------------------------------
 
 # Downloaded PDFs and each run's raw extraction output, which the review
@@ -275,6 +310,20 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # The API mounts /mcp/ only when this is set; see be-main/mcp_server.
+      dynamic "env" {
+        for_each = var.enable_mcp ? [google_secret_manager_secret.mcp_api_key[0].secret_id] : []
+        content {
+          name = "MCP_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
@@ -306,6 +355,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_version.database_url,
     google_storage_bucket_iam_member.api_data,
+    google_secret_manager_secret_iam_member.api_reads_mcp_api_key,
+    google_secret_manager_secret_version.mcp_api_key,
   ]
 }
 

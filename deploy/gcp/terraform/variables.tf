@@ -83,3 +83,13 @@ variable "deletion_protection" {
   type        = bool
   default     = true
 }
+
+variable "enable_mcp" {
+  description = <<-EOT
+    Serve the corpus tools to outside agents over MCP at <api_url>/mcp/. The
+    bearer token is generated into Secret Manager as researchit-mcp-api-key;
+    read it with `gcloud secrets versions access latest --secret researchit-mcp-api-key`.
+  EOT
+  type        = bool
+  default     = false
+}
