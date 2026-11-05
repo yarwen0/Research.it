@@ -21,17 +21,23 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
+from opentelemetry import trace
+from opentelemetry.context import Context
+from opentelemetry.trace import StatusCode
 from sqlalchemy import select
 
-from db.models import Job, JobEvent, JobStatus, Project
+from db.models import Job, JobEvent, JobStatus, LLMCallRecord, Project
 from db.session import session_scope
 from services.events import PipelineEvent, StatusType
 from services.research_pipeline import ResearchPipeline
+from telemetry import LLMCall, collect_usage, rollup
+from telemetry.pricing import PRICES_CHECKED
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer(__name__)
 
 # How long a tailing client waits between checks for new events. Short enough
 # to feel live, long enough not to hammer the database.
@@ -62,7 +68,14 @@ def create_job(user_prompt: str, params: dict[str, Any]) -> str:
     return job_id
 
 
-def _append_event(job_id: str, sequence: int, event: PipelineEvent) -> None:
+def _append_event(
+    job_id: str, sequence: int, event: PipelineEvent, calls: Sequence[LLMCall] = ()
+) -> None:
+    """Record an event, plus the LLM calls made since the previous one.
+
+    Writing calls as they happen, rather than once at the end, means a run
+    that dies halfway still leaves on record what it had already spent.
+    """
     with session_scope() as session:
         session.add(
             JobEvent(
@@ -73,6 +86,17 @@ def _append_event(job_id: str, sequence: int, event: PipelineEvent) -> None:
                 result=event.result,
             )
         )
+        _add_calls(session, job_id, calls)
+
+
+def _add_calls(session, job_id: str, calls: Sequence[LLMCall]) -> None:
+    session.add_all(LLMCallRecord(job_id=job_id, **call.as_record()) for call in calls)
+
+
+def _record_calls(job_id: str, calls: Sequence[LLMCall]) -> None:
+    if calls:
+        with session_scope() as session:
+            _add_calls(session, job_id, calls)
 
 
 def _mark(job_id: str, status: JobStatus, *, error: str | None = None) -> None:
@@ -113,28 +137,43 @@ async def run_job(job_id: str, pipeline: ResearchPipeline) -> None:
     failed = False
     linked = False
 
-    try:
-        async for event in pipeline.run():
-            _append_event(job_id, sequence, event)
-            sequence += 1
+    # A trace of its own rather than a child of the request that started it:
+    # the run outlives that request, usually by minutes.
+    with _tracer.start_as_current_span(
+        "research_job", context=Context(), attributes={"researchit.job_id": job_id}
+    ) as span, collect_usage() as usage:
+        try:
+            async for event in pipeline.run():
+                _append_event(job_id, sequence, event, usage.drain())
+                sequence += 1
 
-            # The project row appears a stage or two in, so keep trying until
-            # it does. Cheap once linked, and the flag stops it after that.
-            if not linked:
-                linked = _try_link_project(job_id, pipeline.project_id)
+                # The project row appears a stage or two in, so keep trying
+                # until it does. Cheap once linked, and the flag stops it.
+                if not linked:
+                    linked = _try_link_project(job_id, pipeline.project_id)
+                    if linked:
+                        span.set_attribute("researchit.project_id", pipeline.project_id)
 
-            if event.status == StatusType.ERROR and "Pipeline error" in event.message:
-                failed = True
-    except asyncio.CancelledError:
-        # Shutdown, not failure. Record it so a tailing client is not left
-        # waiting on a job that will never produce another event.
-        logger.warning("Job %s cancelled", job_id)
-        _mark(job_id, JobStatus.FAILED, error="Job cancelled")
-        raise
-    except Exception as exc:
-        logger.exception("Job %s crashed", job_id)
-        _mark(job_id, JobStatus.FAILED, error=str(exc))
-        return
+                if event.status == StatusType.ERROR and "Pipeline error" in event.message:
+                    failed = True
+        except asyncio.CancelledError:
+            # Shutdown, not failure. Record it so a tailing client is not left
+            # waiting on a job that will never produce another event.
+            logger.warning("Job %s cancelled", job_id)
+            _record_calls(job_id, usage.drain())
+            _mark(job_id, JobStatus.FAILED, error="Job cancelled")
+            raise
+        except Exception as exc:
+            logger.exception("Job %s crashed", job_id)
+            span.record_exception(exc)
+            span.set_status(StatusCode.ERROR, str(exc))
+            _record_calls(job_id, usage.drain())
+            _mark(job_id, JobStatus.FAILED, error=str(exc))
+            return
+
+        _record_calls(job_id, usage.drain())
+        if failed:
+            span.set_status(StatusCode.ERROR, "pipeline reported an error")
 
     _mark(job_id, JobStatus.FAILED if failed else JobStatus.COMPLETED)
     logger.info("Job %s finished after %s events", job_id, sequence)
@@ -170,6 +209,50 @@ def get_job(job_id: str) -> dict[str, Any]:
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
         }
+
+
+def get_job_metrics(job_id: str) -> dict[str, Any]:
+    """What a job's LLM calls cost: tokens, latency, throughput, dollars.
+
+    Rolled up three ways — the whole run, each pipeline stage, and each
+    model — so the stage worth optimizing and the model worth swapping are
+    both visible. Readable while the job is still running.
+    """
+    with session_scope() as session:
+        job = session.get(Job, job_id)
+        if job is None:
+            raise JobNotFoundError(job_id)
+        status = job.status.value
+        rows = session.scalars(
+            select(LLMCallRecord)
+            .where(LLMCallRecord.job_id == job_id)
+            .order_by(LLMCallRecord.id)
+        ).all()
+        records = [
+            {
+                "stage": row.stage,
+                "provider": row.provider,
+                "model": row.model,
+                "operation": row.operation,
+                "input_tokens": row.input_tokens,
+                "output_tokens": row.output_tokens,
+                "usage_estimated": row.usage_estimated,
+                "latency_ms": row.latency_ms,
+                "generation_ms": row.generation_ms,
+                "cost_usd": row.cost_usd,
+                "status": row.status,
+            }
+            for row in rows
+        ]
+
+    return {
+        "job_id": job_id,
+        "status": status,
+        "prices_checked": PRICES_CHECKED,
+        "totals": rollup.summarize(records),
+        "by_stage": rollup.by_stage(records),
+        "by_model": rollup.by_model(records),
+    }
 
 
 def _fetch_events(job_id: str, after: int) -> list[dict[str, Any]]:
