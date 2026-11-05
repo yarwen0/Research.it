@@ -35,6 +35,18 @@ class PreparedChunk:
 
 
 @dataclass(frozen=True)
+class Passage:
+    """A stored chunk with what it came from, for lexical indexing."""
+
+    chunk_id: int
+    paper_id: str  # the paper's external id, e.g. an arXiv id
+    paper_title: str
+    kind: str
+    section: str | None
+    text: str
+
+
+@dataclass(frozen=True)
 class ScoredChunk:
     """A search hit."""
 
@@ -127,6 +139,39 @@ class ChunkStore:
         # .all() first: a Result has .keys(), so dict() would treat it as a
         # mapping instead of iterating its rows.
         return dict(rows.all())
+
+    def version(self, project_id: str, embedding_model: str) -> tuple[int, int]:
+        """(count, highest id) of a project's chunks for one model.
+
+        Changes whenever chunks are added, replaced or removed, which makes it
+        a cheap key for caching anything derived from them.
+        """
+        count, highest = self.session.execute(
+            select(func.count(), func.max(Chunk.id)).where(
+                Chunk.project_id == project_id, Chunk.embedding_model == embedding_model
+            )
+        ).one()
+        return count or 0, highest or 0
+
+    def passages(self, project_id: str, embedding_model: str) -> list[Passage]:
+        """Every chunk of a project for one model, in id order, without vectors."""
+        rows = self.session.execute(
+            select(Chunk.id, Chunk.kind, Chunk.section, Chunk.text, Paper.external_id, Paper.title)
+            .join(Paper, Paper.id == Chunk.paper_id)
+            .where(Chunk.project_id == project_id, Chunk.embedding_model == embedding_model)
+            .order_by(Chunk.id)
+        )
+        return [
+            Passage(
+                chunk_id=row.id,
+                paper_id=row.external_id,
+                paper_title=row.title,
+                kind=row.kind,
+                section=row.section,
+                text=row.text,
+            )
+            for row in rows
+        ]
 
     def search(
         self,
