@@ -56,6 +56,26 @@ This reduces prompt injection; it does not eliminate it. A model can still be
 steered by text in its context, and the answer it writes is shown to a user.
 Treat answers as untrusted output and render them as text, never as HTML.
 
+## Outside agents → `/mcp/`
+
+The MCP endpoint gives an agent the corpus tools. What constrains it:
+
+| Guard | What it stops |
+|---|---|
+| Mounted only when `MCP_API_KEY` is set | An unauthenticated MCP endpoint existing at all |
+| Bearer token compared in constant time | Guessing the token byte by byte from response timing |
+| Every tool read-only; no tool starts a run | An agent spending minutes of downloads and LLM budget |
+| A per-client limit at the mount (`RATE_LIMIT_MCP`), checked before the token | One client flooding the tools, or guessing the token at speed |
+
+The mount needs a limiter of its own. The API's middleware matches each
+request to a route endpoint and treats a request it cannot match as exempt;
+a mounted ASGI app has no endpoint, so `/mcp/` was unlimited until the gate
+applied the same kind of limit itself.
+
+DNS-rebinding protection is off for the mounted endpoint: it exists to stop a
+web page from reaching a server that trusts local callers, and this one trusts
+no caller without the token, which a rebound page cannot send.
+
 ## Cost and abuse → all endpoints
 
 There is no authentication yet, so every endpoint is rate limited per client
