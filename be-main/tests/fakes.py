@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
+import threading
 import zlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
@@ -44,28 +46,92 @@ class HashingEmbedder:
 class FakeLLMClient:
     """A provider client with scripted chat replies and hashed embeddings.
 
-    Chat calls go through `track_llm_call` exactly as a real client's do, so
-    usage attribution is exercised too. With no scripted reply left, it
-    declines, which is the safe answer.
+    Replies come from a queue, or from `respond(messages, response_format)`
+    when given — the form to use when calls arrive from parallel threads and
+    their order is not fixed. Chat calls go through `track_llm_call` exactly as
+    a real client's do, so usage attribution is exercised too. With nothing
+    scripted, it declines, which is the safe answer.
     """
 
-    def __init__(self, replies: Sequence[str] = (), *, embedder: HashingEmbedder | None = None) -> None:
+    def __init__(
+        self,
+        replies: Sequence[str] = (),
+        *,
+        respond: Callable[[list[dict], dict | None], str] | None = None,
+        embedder: HashingEmbedder | None = None,
+    ) -> None:
         self.replies = list(replies)
+        self.respond = respond
         self.requests: list[tuple[list[dict], dict | None]] = []
         self.embedder = embedder or HashingEmbedder()
         self.embedding_model_id = self.embedder.model_id
+        self._lock = threading.Lock()
 
     def chat_completion(self, messages, *, response_format):
-        self.requests.append((messages, response_format))
+        with self._lock:
+            self.requests.append((messages, response_format))
         with track_llm_call("fake", "fake-chat", "chat") as call:
-            reply = (
-                self.replies.pop(0)
-                if self.replies
-                else '{"answer": "The sources do not say.", "insufficient_evidence": true}'
-            )
+            if self.respond is not None:
+                reply = self.respond(messages, response_format)
+            else:
+                with self._lock:
+                    reply = (
+                        self.replies.pop(0)
+                        if self.replies
+                        else '{"answer": "The sources do not say.", "insufficient_evidence": true}'
+                    )
             call.input_tokens = sum(len(m["content"]) for m in messages) // 4
             call.output_tokens = len(reply) // 4
         return reply
 
+    def schema_names(self) -> list[str]:
+        """The structured-output schema each request asked for, in order."""
+        with self._lock:
+            return [
+                (response_format or {}).get("json_schema", {}).get("name", "")
+                for _, response_format in self.requests
+            ]
+
     def get_embeddings(self, texts, model=None, *, task=None):
         return [self.embedder.vector(text).tolist() for text in texts]
+
+
+def react_step(action: str, **fields) -> str:
+    """One ReAct step as the model would emit it."""
+    return json.dumps({"thought": f"use {action}", "action": action, **fields})
+
+
+def schema_name(response_format: dict | None) -> str:
+    return (response_format or {}).get("json_schema", {}).get("name", "")
+
+
+def agent_responder(*, plan, critiques=("accept",), answer="Hourglass uses rmsprop [E1]."):
+    """Replies for the assistant's graph by what is being asked, whichever thread asks.
+
+    `plan` is the supervisor's decision; `critiques` the critic's verdicts in
+    turn (accept once they run out); `answer` what the writer drafts.
+    """
+    verdicts = list(critiques)
+
+    def respond(messages, response_format):
+        name = schema_name(response_format)
+        system = messages[0]["content"]
+        if name == "assistant_plan":
+            return json.dumps({"reasoning": "because", **plan})
+        if name == "react_step":
+            if "Result of" in messages[-1]["content"]:
+                return react_step("finish", answer="Found it [E1].")
+            if "gaps specialist" in system:
+                return react_step("research_gaps", top=2)
+            if "citations specialist" in system:
+                return react_step("citation_stats", top=2)
+            return react_step("search_passages", query="rmsprop learning rate")
+        if name == "assistant_answer":
+            return json.dumps({"answer": answer, "insufficient_evidence": False})
+        if name == "critique":
+            verdict = verdicts.pop(0) if verdicts else "accept"
+            problems = [] if verdict == "accept" else ["The second claim is unsupported."]
+            return json.dumps({"verdict": verdict, "problems": problems})
+        raise AssertionError(f"unexpected request for {name!r}")
+
+    return respond
