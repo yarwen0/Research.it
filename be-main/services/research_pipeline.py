@@ -25,6 +25,8 @@ from api.arxiv import ArxivClient, ArxivRateLimitError, TopicGenerator
 from core import PDFExtractor, ReferenceParameterExtractorFallback, create_llm_client
 from db.repositories import GraphRepository, OntologyRepository, ProjectRepository
 from db.session import session_scope
+from retrieval.embedder import ClientEmbedder
+from retrieval.indexer import PaperIndexer
 from services import gaps as gap_service
 from services.artifacts import save_processed_papers
 from services.events import PipelineEvent, completed, error, processing, progress
@@ -71,6 +73,11 @@ class ResearchPipeline:
 
         self.project_id = uuid.uuid4().hex
         self.processed_papers: list[dict[str, Any]] = []
+        # Full text per paper id, held only until it is indexed. It is not
+        # part of processed_papers, which goes out in every progress event
+        # and into the saved JSON.
+        self._paper_texts: dict[str, str] = {}
+        self.retrieval_summary: dict[str, Any] = {"indexed_papers": 0, "indexed_chunks": 0}
 
     # -- setup -------------------------------------------------------------
 
@@ -84,6 +91,7 @@ class ResearchPipeline:
         )
         self.topic_generator = TopicGenerator(self.llm_client)
         self.extractor = PDFExtractor(llm_client=self.llm_client)
+        self.indexer = PaperIndexer(ClientEmbedder(self.llm_client))
 
     async def _run_blocking(self, fn, *args):
         """Push blocking work onto a worker thread, off the event loop.
@@ -256,6 +264,7 @@ class ResearchPipeline:
                 continue
 
             self.processed_papers.append(processed)
+            self._paper_texts[processed["paper_id"]] = paper_data.get("text") or ""
             yield progress(
                 f"Completed paper: {title[:50]}", {"processed_paper": processed}
             )
@@ -272,6 +281,50 @@ class ResearchPipeline:
         # Hundreds of inserts for a full run; keep them off the event loop.
         await self._run_blocking(build)
         yield processing("Graph updated successfully.")
+
+    async def _index_for_retrieval(self) -> AsyncGenerator[PipelineEvent, None]:
+        """Chunk, embed and store every processed paper.
+
+        Retrieval is an addition to a run, not a requirement of one: a paper
+        that fails to index — the embedding model not pulled, a provider
+        outage — is reported once in a summary and the run carries on.
+        """
+        if not self.processed_papers:
+            return
+
+        yield processing(
+            f"Indexing {len(self.processed_papers)} papers for question answering..."
+        )
+        failures: list[str] = []
+        for paper in self.processed_papers:
+            try:
+                count = await self._run_blocking(
+                    self.indexer.index_paper,
+                    self.project_id,
+                    paper,
+                    self._paper_texts.get(paper["paper_id"], ""),
+                )
+            except Exception as exc:
+                logger.warning("Indexing failed for paper %s: %s", paper["paper_id"], exc)
+                failures.append(f"{paper.get('title', paper['paper_id'])}: {exc}")
+                continue
+            self.retrieval_summary["indexed_papers"] += 1
+            self.retrieval_summary["indexed_chunks"] += count
+
+        # Nothing reads the texts after this; a long run should not keep
+        # megabytes of them alive until it ends.
+        self._paper_texts.clear()
+
+        if failures:
+            yield error(
+                f"Indexing failed for {len(failures)} of {len(self.processed_papers)} "
+                f"papers; first failure: {failures[0]}"
+            )
+        yield progress(
+            f"Indexed {self.retrieval_summary['indexed_chunks']} passages from "
+            f"{self.retrieval_summary['indexed_papers']} papers",
+            dict(self.retrieval_summary),
+        )
 
     async def _analyze(self) -> AsyncGenerator[PipelineEvent, None]:
         yield processing("Generating trend analyses and visualization data...")
@@ -361,6 +414,9 @@ class ResearchPipeline:
             async for event in self._persist_graph():
                 yield event
 
+            async for event in self._index_for_retrieval():
+                yield event
+
             async for event in self._analyze():
                 yield event
 
@@ -383,6 +439,7 @@ class ResearchPipeline:
                     "datasets": self.dataset_summary,
                     "suggested_papers": self.suggested_papers,
                     "project_id": self.project_id,
+                    "retrieval": self.retrieval_summary,
                 },
             )
 
