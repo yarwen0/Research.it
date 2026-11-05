@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import TextIO
 
 import structlog
 from asgi_correlation_id import correlation_id
@@ -29,11 +30,14 @@ def _add_request_id(_logger, _method_name, event_dict):
     return event_dict
 
 
-def configure_logging() -> None:
+def configure_logging(stream: TextIO = sys.stdout) -> None:
     """Route stdlib logging and structlog through one pipeline.
 
     Third-party libraries log through stdlib, so both have to end up in the
     same format — otherwise half the output is JSON and half is not.
+
+    `stream` is stdout for the API. The stdio MCP server passes stderr, since
+    its stdout is the protocol channel and a stray log line corrupts it.
     """
     # Annotated explicitly: the members have differing signatures, so the
     # inferred element type would collapse to `object`.
@@ -74,7 +78,7 @@ def configure_logging() -> None:
         ],
     )
 
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(stream)
     handler.setFormatter(formatter)
 
     root = logging.getLogger()
