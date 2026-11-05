@@ -93,10 +93,15 @@ class TestThrottling:
 
 
 @pytest.mark.parametrize(
-    "endpoint_name",
-    ["research_endpoint", "create_review_endpoint", "compile_latex_endpoint"],
+    ("module_name", "endpoint_name"),
+    [
+        ("api.api", "research_endpoint"),
+        ("api.api", "create_review_endpoint"),
+        ("api.api", "compile_latex_endpoint"),
+        ("api.retrieval", "ask_endpoint"),
+    ],
 )
-def test_decorated_api_endpoints_satisfy_header_injection(endpoint_name):
+def test_decorated_api_endpoints_satisfy_header_injection(module_name, endpoint_name):
     """headers_enabled needs somewhere to write X-RateLimit-* headers.
 
     slowapi injects into the returned value when it is a Response, and falls
@@ -104,11 +109,10 @@ def test_decorated_api_endpoints_satisfy_header_injection(endpoint_name):
     satisfying neither raises at request time, not at import time, so nothing
     else in the suite would catch the regression.
     """
+    import importlib
     import inspect
 
-    from api import api as api_module
-
-    endpoint = getattr(api_module, endpoint_name)
+    endpoint = getattr(importlib.import_module(module_name), endpoint_name)
     params = inspect.signature(endpoint).parameters
     assert "request" in params, f"{endpoint_name} needs a `request` parameter"
 
@@ -132,3 +136,4 @@ def test_expensive_endpoints_are_capped_tighter_than_the_default():
 
     assert per_hour(config.RATE_LIMIT_RESEARCH) < per_hour(config.RATE_LIMIT_DEFAULT)
     assert per_hour(config.RATE_LIMIT_REVIEW) < per_hour(config.RATE_LIMIT_DEFAULT)
+    assert per_hour(config.RATE_LIMIT_ASK) < per_hour(config.RATE_LIMIT_DEFAULT)
