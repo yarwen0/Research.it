@@ -51,6 +51,44 @@ class TestClientIdentifier:
         assert client_identifier(request) == "10.0.0.1"
 
 
+class TestAppendingProxies:
+    """Proxies that append to X-Forwarded-For, like Google's front end.
+
+    The client controls everything left of what the trusted proxy appended, so
+    keying on the left-most entry would let it mint a fresh bucket per request.
+    """
+
+    @pytest.fixture(autouse=True)
+    def one_trusted_hop(self, monkeypatch):
+        monkeypatch.setattr(rate_limit, "TRUSTED_PROXY_HOPS", 1)
+        monkeypatch.setattr(rate_limit, "TRUST_PROXY_HEADERS", False)
+
+    def test_uses_the_address_the_proxy_appended(self):
+        request = _request_with({"x-forwarded-for": "6.6.6.6, 203.0.113.7"})
+        assert client_identifier(request) == "203.0.113.7"
+
+    def test_a_forged_entry_cannot_change_the_bucket(self):
+        honest = _request_with({"x-forwarded-for": "203.0.113.7"})
+        forged = _request_with({"x-forwarded-for": "1.1.1.1, 2.2.2.2, 203.0.113.7"})
+        assert client_identifier(honest) == client_identifier(forged) == "203.0.113.7"
+
+    def test_counts_hops_from_the_right(self, monkeypatch):
+        # A load balancer in front of the proxy appends its own address too.
+        monkeypatch.setattr(rate_limit, "TRUSTED_PROXY_HOPS", 2)
+        request = _request_with({"x-forwarded-for": "6.6.6.6, 203.0.113.7, 10.1.1.1"})
+        assert client_identifier(request) == "203.0.113.7"
+
+    def test_too_few_entries_falls_back_to_the_peer(self, monkeypatch):
+        monkeypatch.setattr(rate_limit, "TRUSTED_PROXY_HOPS", 2)
+        request = _request_with({"x-forwarded-for": "203.0.113.7"}, client_host="10.0.0.1")
+        assert client_identifier(request) == "10.0.0.1"
+
+    def test_takes_precedence_over_trusting_the_left_most(self, monkeypatch):
+        monkeypatch.setattr(rate_limit, "TRUST_PROXY_HEADERS", True)
+        request = _request_with({"x-forwarded-for": "6.6.6.6, 203.0.113.7"})
+        assert client_identifier(request) == "203.0.113.7"
+
+
 @pytest.fixture
 def throttled_app():
     """A minimal app with a 2/minute endpoint, isolated from the real routes."""
