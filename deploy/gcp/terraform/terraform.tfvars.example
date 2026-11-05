@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in. Everything else has a default; see
+# variables.tf for what each one trades off.
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+
+# vertex_location     = "us-central1"
+# vertex_model        = "gemini-2.5-flash-lite"
+# db_tier             = "db-f1-micro"
+# api_min_instances   = 0
+# extra_cors_origins  = ["https://researchit.example.com"]

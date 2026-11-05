@@ -1,0 +1,9 @@
+# Provider plugins and local state; the lock file is committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+# Real values stay local. terraform.tfvars.example is the template.
+*.tfvars
+!terraform.tfvars.example
+crash.log
