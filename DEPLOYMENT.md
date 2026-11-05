@@ -22,6 +22,10 @@ docker compose --profile local-llm up --build
 The `ollama-pull` service fetches `qwen2.5:7b` and `nomic-embed-text` on first
 start (~5 GB), then exits. Subsequent runs reuse the `ollama-models` volume.
 
+Compose runs Postgres from the `pgvector/pgvector` image: the migrations
+enable the `vector` extension for retrieval. Pointing `DATABASE_URL` at another
+Postgres needs that extension available and a role allowed to create it.
+
 ## 2. Native
 
 See the [root README](README.md#quickstart). You need Python 3.10+, Node 20.9+
