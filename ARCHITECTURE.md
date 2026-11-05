@@ -227,6 +227,28 @@ A project with nothing indexed is refused before any model call. The live
 check against a real corpus refused the one question its papers could not
 answer, and still cited the passage that said what the papers did use.
 
+### Paper text is screened before a model reads it
+
+Every passage bound for a prompt, whether for a grounded answer, the
+assistant's search tool or MCP search, passes through
+[`retrieval/screening.py`](be-main/retrieval/screening.py) first. A passage
+that reads as an instruction to a model is withheld and reported, so the model
+never sees it. `/search`, which shows passages to a person rather than a model,
+marks it instead.
+
+The screen is a set of weighted patterns scored per sentence, so it adds no
+model call and returns the same verdict every time. Catching attacks is the
+easy half. The hard half is leaving alone papers *about* prompt injection,
+which quote "ignore previous instructions" as data; withholding those would
+make a corpus on LLM security unanswerable. A signal inside quotation marks
+counts a quarter, and a sentence in the vocabulary of security research counts
+0.4.
+
+It is measured on its own labelled set, built against a dev split and scored
+on a held-out one ([`evals/injection`](be-main/evals/injection/README.md)).
+It is one layer: fencing, the system prompt and citation checks sit behind it
+([SECURITY.md](SECURITY.md)).
+
 ### Agents act in JSON, and the critic is advisory
 
 The research assistant ([`agents/`](be-main/agents)) is a LangGraph state
@@ -386,6 +408,9 @@ Stated plainly, because a reviewer will find them anyway:
 - **Grounding is checked structurally, not semantically.** A citation must
   point at a passage the model was given; nothing yet checks that the passage
   supports the sentence citing it.
+- **The injection screen is pattern-based.** It caught 13 of 15 held-out
+  attacks; a phrasing it has no pattern for reaches the model, where only the
+  layers behind it stand.
 - **Section detection is heuristic.** A heading wrapped over two lines keeps
   only its first, and run-in headings (a bold phrase opening a paragraph) are
   not found at all; those passages carry the enclosing section's name.
