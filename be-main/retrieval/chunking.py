@@ -48,6 +48,14 @@ _NAMED_HEADING = re.compile(
 _APPENDIX_NAMED = re.compile(r"^(?:appendix|appendices|supplementary)\b", re.IGNORECASE)
 _APPENDIX_LETTERED = re.compile(r"^[A-H](?:\.\d{1,2}){0,2}\.?\s+[A-Z][A-Za-z\-\u2013:&' ]{2,60}$")
 
+# A section number alone on its line, which some templates (LREC, ACL) render
+# apart from the title that follows it: "5.2.1." then "Hardware Setup". Dotted
+# forms only — a bare "4" is far more often a page number, and joining it to
+# the next line would swallow a line of body text as a heading.
+_LONE_SECTION_NUMBER = re.compile(
+    r"^(?:\d{1,2}\.(?:\d{1,2}\.){0,3}|\d{1,2}(?:\.\d{1,2}){1,3}\.?|[IVX]{1,4}\.)$"
+)
+
 # A wrapped sentence often ends a line on one of these; a heading never does.
 _TRAILING_STOPWORDS = frozenset(
     {"a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "of", "on", "or",
@@ -96,6 +104,23 @@ def clean_text(text: str) -> str:
     return re.sub(r"(?<=[a-z])-\n(?=[a-z])", "", text)
 
 
+def _rejoin_split_headings(lines: list[str]) -> list[str]:
+    """Put a section number back on the same line as its title."""
+    joined: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if _LONE_SECTION_NUMBER.match(line) and index + 1 < len(lines):
+            candidate = f"{line} {lines[index + 1]}"
+            if _is_heading(candidate) or REFERENCE_HEADING.match(candidate):
+                joined.append(candidate)
+                index += 2
+                continue
+        joined.append(line)
+        index += 1
+    return joined
+
+
 def _drop_bibliography(lines: list[str]) -> list[str]:
     """Remove the last bibliography, up to any appendix that follows it."""
     starts = [i for i, line in enumerate(lines) if REFERENCE_HEADING.match(line)]
@@ -115,7 +140,9 @@ def split_sections(text: str) -> list[tuple[str | None, str]]:
     Text before the first heading — title, authors, sometimes the abstract —
     comes back under a heading of None.
     """
-    lines = _drop_bibliography([line.strip() for line in clean_text(text).splitlines()])
+    lines = _drop_bibliography(
+        _rejoin_split_headings([line.strip() for line in clean_text(text).splitlines()])
+    )
 
     sections: list[tuple[str | None, str]] = []
     heading: str | None = None
