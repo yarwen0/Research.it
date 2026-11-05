@@ -9,9 +9,11 @@ from __future__ import annotations
 import re
 
 # A line that is only a bibliography heading — "References", "7. References",
-# "**Bibliography**" — and nothing else, so the word in running prose does not
-# count.
+# "**Bibliography**", LREC's "Bibliographical References" — and nothing else,
+# so the word in running prose does not count.
 REFERENCE_HEADING = re.compile(
-    r"^\s*\*{0,2}(?:\d+\.?\s*)?(references|bibliography|works\s+cited|literature\s+cited)\*{0,2}\s*$",
+    r"^\s*\*{0,2}(?:\d+\.?\s*)?"
+    r"((?:bibliographical\s+)?references|bibliography|works\s+cited|literature\s+cited)"
+    r"\*{0,2}\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
