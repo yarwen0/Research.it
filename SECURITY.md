@@ -36,6 +36,24 @@ directory. It is applied twice on purpose: once as a Pydantic validator so the
 request fails with 422 before any work starts, and once at the `open()` call
 so the invariant holds regardless of caller.
 
+## Untrusted paper text → LLM prompts
+
+Every PDF the pipeline reads was written by someone else, and its text ends
+up inside prompts — extraction, references, and every grounded answer. A
+paper can contain "ignore your instructions" as easily as it contains an
+abstract.
+
+| Guard | What it stops |
+|---|---|
+| Passages fenced in `<source>` tags, with any tag inside them neutralized | Text closing its own fence and posing as instructions |
+| The system prompt states sources are data, not instructions | The model obeying text it was asked to quote |
+| Citations checked against the ids actually supplied | An answer citing evidence that was never retrieved |
+| Structured output (JSON schema) for answers | Free-form text smuggling in fake fields |
+
+This reduces prompt injection; it does not eliminate it. A model can still be
+steered by text in its context, and the answer it writes is shown to a user.
+Treat answers as untrusted output and render them as text, never as HTML.
+
 ## Cost and abuse → all endpoints
 
 There is no authentication yet, so every endpoint is rate limited per client
