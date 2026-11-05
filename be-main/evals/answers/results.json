@@ -1,24 +1,28 @@
 {
   "model": "qwen2.5:7b",
   "embedding_model": "nomic-embed-text",
-  "wall_clock_s": 324.7,
+  "wall_clock_s": 131.7,
   "summary": {
     "questions": 26,
     "answerable": {
       "count": 18,
-      "correct": 0.833,
-      "supported_by_citation": 0.278,
-      "declined_wrongly": 0.056
+      "correct": 0.889,
+      "supported_by_citation": 0.889,
+      "declined_wrongly": 0.0
     },
     "unanswerable": {
       "count": 8,
       "declined": 1.0
     },
-    "grounded": 0.615,
+    "grounded": 1.0,
     "dropped_citations": 0,
-    "latency_ms_p50": 12216.4,
-    "latency_ms_p95": 17346.9,
-    "mean_input_tokens": 2366
+    "citations": {
+      "mean_sources_cited": 1.38,
+      "cited_every_source": 0.0
+    },
+    "latency_ms_p50": 3865.4,
+    "latency_ms_p95": 13035.7,
+    "mean_input_tokens": 2382
   },
   "questions": [
     {
@@ -27,41 +31,58 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 18529.9,
-      "input_tokens": 2168,
-      "output_tokens": 39,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 4379.1,
+      "input_tokens": 2184,
+      "output_tokens": 49,
       "correct": true,
       "supported": true,
       "question": "What learning rate was the stacked hourglass network trained with?",
-      "answer": "[S1] The stacked hourglass network was trained using an initial learning rate of 2.5e-4."
+      "answer": "The stacked hourglass network was trained with a learning rate of 2.5e-4.",
+      "cited": [
+        "S1",
+        "S4"
+      ]
     },
     {
       "id": "h02",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 9364.8,
-      "input_tokens": 2016,
-      "output_tokens": 34,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 4222.1,
+      "input_tokens": 2032,
+      "output_tokens": 40,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "How long does training the hourglass network take, and on what GPU?",
-      "answer": "Training takes about 3 days on a 12 GB NVIDIA TitanX GPU."
+      "answer": "Training takes about 3 days on a 12 GB NVIDIA TitanX GPU.",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "h03",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 14021.9,
-      "input_tokens": 2658,
-      "output_tokens": 47,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 3956.8,
+      "input_tokens": 2674,
+      "output_tokens": 57,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What elbow and wrist accuracy does the hourglass network reach on MPII?",
-      "answer": "The hourglass network reaches an elbow accuracy of 91.2% and a wrist accuracy of 87.1% on the MPII dataset."
+      "answer": "The hourglass network reaches an elbow accuracy of 91.2% and a wrist accuracy of 87.1% on MPII.",
+      "cited": [
+        "S1",
+        "S4"
+      ]
     },
     {
       "id": "h04",
@@ -69,69 +90,98 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 13826.7,
-      "input_tokens": 2436,
-      "output_tokens": 49,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 4086.6,
+      "input_tokens": 2452,
+      "output_tokens": 54,
       "correct": true,
       "supported": true,
       "question": "How many images does the FLIC dataset contain?",
-      "answer": "[S1] states that the FLIC dataset contains 5003 images, with 3987 for training and 1016 for testing."
+      "answer": "The FLIC dataset contains 5003 images, with 3987 for training and 1016 for testing.",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "h08",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 12446.5,
-      "input_tokens": 2334,
-      "output_tokens": 41,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 3774.0,
+      "input_tokens": 2350,
+      "output_tokens": 47,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What rotation and scaling augmentation is used to train the hourglass model?",
-      "answer": "The training includes rotation (+/- 30 degrees) and scaling (0.75-1.25)."
+      "answer": "The training includes rotation (+/- 30 degrees) and scaling (0.75-1.25).",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "h10",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 11160.8,
-      "input_tokens": 2330,
-      "output_tokens": 19,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 3083.7,
+      "input_tokens": 2346,
+      "output_tokens": 28,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What fraction of annotated elbows and wrists are marked visible in the validation set?",
-      "answer": "About 75%"
+      "answer": "About 75%",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "b01",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10061.9,
-      "input_tokens": 2019,
-      "output_tokens": 26,
+      "sources_cited": 4,
+      "sources_supplied": 8,
+      "latency_ms": 4784.4,
+      "input_tokens": 2035,
+      "output_tokens": 68,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What top-5 error does the batch-normalized ensemble reach on ImageNet?",
-      "answer": ":[4.9%, 4.82%]"
+      "answer": "The batch-normalized ensemble reaches a top-5 validation error of 4.9% and a test error of 4.82% on ImageNet.",
+      "cited": [
+        "S1",
+        "S2",
+        "S3",
+        "S5"
+      ]
     },
     {
       "id": "b06",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 12044.7,
-      "input_tokens": 2264,
-      "output_tokens": 24,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 2794.8,
+      "input_tokens": 2280,
+      "output_tokens": 31,
       "correct": false,
       "supported": false,
       "question": "How many times fewer training steps does batch normalization need to match Inception?",
-      "answer": "13.3 · 106"
+      "answer": "5 times fewer",
+      "cited": [
+        "S2",
+        "S3"
+      ]
     },
     {
       "id": "b07",
@@ -139,41 +189,57 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 15063.2,
-      "input_tokens": 2417,
-      "output_tokens": 52,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 3365.7,
+      "input_tokens": 2433,
+      "output_tokens": 39,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What initial learning rate did BN-x30 use?",
-      "answer": "[S2][S3] BN-x30 used an initial learning rate of 0.045, which is 30 times that of the original Inception network."
+      "answer": "BN-x30 used an initial learning rate of 0.045",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "b10",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 12388.0,
-      "input_tokens": 2235,
-      "output_tokens": 33,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 3154.1,
+      "input_tokens": 2251,
+      "output_tokens": 38,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "What accuracy does BN-x5-Sigmoid reach?",
-      "answer": "BN-x5-Sigmoid reaches an accuracy of 69.8%."
+      "answer": "BN-x5-Sigmoid achieves an accuracy of 69.8%.",
+      "cited": [
+        "S2"
+      ]
     },
     {
       "id": "d01",
       "answerable": true,
-      "declined": true,
+      "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 17587.2,
-      "input_tokens": 3077,
-      "output_tokens": 16,
-      "correct": false,
-      "supported": false,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 13710.2,
+      "input_tokens": 3093,
+      "output_tokens": 60,
+      "correct": true,
+      "supported": true,
       "question": "What MPJPE does DreamPose3D reach on Human3.6M with CPN-detected keypoints?",
-      "answer": "sync"
+      "answer": "DreamPose3D reaches an mPJPE of 29.5 mm on the Human3.6M dataset using CPN-detected keypoints as inputs.",
+      "cited": [
+        "S1",
+        "S5"
+      ]
     },
     {
       "id": "d02",
@@ -181,41 +247,57 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 16625.9,
-      "input_tokens": 2540,
-      "output_tokens": 90,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 5918.5,
+      "input_tokens": 2556,
+      "output_tokens": 92,
       "correct": true,
       "supported": true,
       "question": "What optimizer and GPUs were used to train DreamPose3D?",
-      "answer": "DreamPose3D was optimized using the AdamW optimizer [S1] with a learning rate of 1 × 10−5 and a weight decay of 1 × 10−4 per epoch. The model was trained on three A6000 GPUs, each batch size of 4 for 100 epochs [S1]."
+      "answer": "DreamPose3D was optimized using the AdamW optimizer [Loshchilov and Hutter, 2017] with a learning rate of 1 × 10−5 and a weight decay of 1 × 10−4 per epoch. The model was trained on three A6000 GPUs.",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "d08",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 13725.0,
-      "input_tokens": 2759,
-      "output_tokens": 27,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 11012.1,
+      "input_tokens": 2775,
+      "output_tokens": 35,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "Which Human3.6M subjects are held out for evaluation?",
-      "answer": "Subjects S9 and S11 are held out for evaluation."
+      "answer": "Subjects S9 and S11 are held out for evaluation.",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "d10",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 13872.0,
-      "input_tokens": 3121,
-      "output_tokens": 49,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 13822.1,
+      "input_tokens": 3137,
+      "output_tokens": 73,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "By how much does DreamPose3D improve on FinePOSE when a 2D detector is used?",
-      "answer": "DreamPose3D outperforms FinePOSE by 7.5% and 6.4% in terms of mPJPE and P-mPJPE, respectively."
+      "answer": "DreamPose3D improves by 7.5% and 6.4% in terms of mPJPE and P-mPJPE, respectively, over FinePOSE when using a 2D keypoint detector.",
+      "cited": [
+        "S1",
+        "S2"
+      ]
     },
     {
       "id": "b02",
@@ -223,13 +305,21 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 13417.5,
-      "input_tokens": 2025,
-      "output_tokens": 82,
+      "sources_cited": 4,
+      "sources_supplied": 8,
+      "latency_ms": 6309.0,
+      "input_tokens": 2041,
+      "output_tokens": 99,
       "correct": true,
       "supported": true,
       "question": "What is internal covariate shift?",
-      "answer": "Internal covariate shift refers to the change in the distribution of network activations due to changes in network parameters during training [S1][S3][S5]. This phenomenon slows down the training process by requiring lower learning rates and careful parameter initialization, especially when dealing with deep networks that have saturating nonlinearities [S4][S3]."
+      "answer": "Internal covariate shift refers to the change in the distribution of network activations due to changes in network parameters during training [S1][S3]. This phenomenon can slow down the training process by requiring lower learning rates and careful parameter initialization, especially when dealing with deep neural networks that have saturating nonlinearities [S4][S5].",
+      "cited": [
+        "S1",
+        "S3",
+        "S4",
+        "S5"
+      ]
     },
     {
       "id": "d04",
@@ -237,27 +327,38 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 11513.8,
-      "input_tokens": 2362,
-      "output_tokens": 27,
+      "sources_cited": 1,
+      "sources_supplied": 8,
+      "latency_ms": 2807.8,
+      "input_tokens": 2378,
+      "output_tokens": 34,
       "correct": true,
       "supported": true,
       "question": "What do the authors call the problem of movements that look alike but have different purposes?",
-      "answer": "The authors refer to this limitation as intent ambiguity [S1]."
+      "answer": "The authors refer to this limitation as intent ambiguity.",
+      "cited": [
+        "S1"
+      ]
     },
     {
       "id": "h11",
       "answerable": true,
       "declined": false,
-      "grounded": false,
+      "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 9650.1,
-      "input_tokens": 1985,
-      "output_tokens": 26,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 3109.2,
+      "input_tokens": 2001,
+      "output_tokens": 39,
       "correct": true,
-      "supported": false,
+      "supported": true,
       "question": "Do the stacked hourglass modules reuse the same parameters?",
-      "answer": "No, the weights are not shared across hourglass modules."
+      "answer": "No, the weights are not shared across hourglass modules.",
+      "cited": [
+        "S2",
+        "S3"
+      ]
     },
     {
       "id": "d07",
@@ -265,13 +366,19 @@
       "declined": false,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 13837.0,
-      "input_tokens": 2434,
-      "output_tokens": 68,
+      "sources_cited": 2,
+      "sources_supplied": 8,
+      "latency_ms": 6071.0,
+      "input_tokens": 2450,
+      "output_tokens": 90,
       "correct": false,
       "supported": false,
       "question": "What do the authors plan to try next to make poses more realistic?",
-      "answer": "The authors plan to explore applying supervision at various points in the network, such as before or after pooling and at different resolutions, to generate more realistic 3D poses. This approach was shown to offer some improvement in performance [S7][S8]."
+      "answer": "The authors plan to explore applying supervision at various points in the network, such as before or after pooling and at different resolutions, to further improve pose realism. This approach was found to offer some improvement in performance, though not surpassing stacking (Figure 8 and Figure 9 from [S7][S8]).",
+      "cited": [
+        "S7",
+        "S8"
+      ]
     },
     {
       "id": "u01",
@@ -279,12 +386,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10076.9,
-      "input_tokens": 2199,
-      "output_tokens": 18,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 2736.1,
+      "input_tokens": 2215,
+      "output_tokens": 36,
       "correct": true,
       "question": "What is the carbon footprint of training DreamPose3D?",
-      "answer": "Insufficient evidence"
+      "answer": "The carbon footprint of training DreamPose3D is not provided in the given sources.",
+      "cited": []
     },
     {
       "id": "u02",
@@ -292,12 +402,21 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10340.8,
-      "input_tokens": 2130,
-      "output_tokens": 18,
+      "sources_cited": 5,
+      "sources_supplied": 8,
+      "latency_ms": 6133.9,
+      "input_tokens": 2146,
+      "output_tokens": 98,
       "correct": true,
       "question": "How does the stacked hourglass network process audio input?",
-      "answer": "Insufficient evidence"
+      "answer": "The provided sources do not contain any information about processing audio input. The stacked hourglass network is described in the context of human pose estimation from visual inputs, specifically images [S1][S2][S3][S4][S5]. There is no mention of audio processing in these sources.",
+      "cited": [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5"
+      ]
     },
     {
       "id": "u03",
@@ -305,12 +424,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 9847.0,
-      "input_tokens": 2152,
-      "output_tokens": 18,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 2846.0,
+      "input_tokens": 2168,
+      "output_tokens": 38,
       "correct": true,
       "question": "Under what license is the batch normalization code released?",
-      "answer": "Insufficient evidence"
+      "answer": "The provided sources do not contain information about the license under which the batch normalization code was released.",
+      "cited": []
     },
     {
       "id": "u04",
@@ -318,12 +440,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 11383.7,
-      "input_tokens": 2314,
-      "output_tokens": 34,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 3141.6,
+      "input_tokens": 2330,
+      "output_tokens": 40,
       "correct": true,
       "question": "How many dollars did it cost to train the batch-normalized Inception network?",
-      "answer": "The sources do not provide information on the financial cost of training the batch-normalized Inception network."
+      "answer": "The cost in dollars to train the batch-normalized Inception network is not provided in the given sources.",
+      "cited": []
     },
     {
       "id": "u05",
@@ -331,12 +456,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10311.7,
-      "input_tokens": 2230,
-      "output_tokens": 18,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 2064.7,
+      "input_tokens": 2246,
+      "output_tokens": 23,
       "correct": true,
       "question": "Which reinforcement learning algorithm does DreamPose3D use to train its denoiser?",
-      "answer": "Insufficient evidence"
+      "answer": "Insufficient evidence",
+      "cited": []
     },
     {
       "id": "u06",
@@ -344,12 +472,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10029.4,
-      "input_tokens": 2179,
-      "output_tokens": 18,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 2172.6,
+      "input_tokens": 2195,
+      "output_tokens": 24,
       "correct": true,
       "question": "What accuracy does the hourglass network reach on the COCO keypoint benchmark?",
-      "answer": "Insufficient evidence"
+      "answer": "Insufficient evidence",
+      "cited": []
     },
     {
       "id": "u07",
@@ -357,12 +488,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 10709.2,
-      "input_tokens": 2285,
-      "output_tokens": 20,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 2395.0,
+      "input_tokens": 2301,
+      "output_tokens": 23,
       "correct": true,
       "question": "How does DreamPose3D fuse LiDAR point clouds with the 2D poses?",
-      "answer": "Insufficient evidence"
+      "answer": "Insufficient evidence",
+      "cited": []
     },
     {
       "id": "u08",
@@ -370,12 +504,15 @@
       "declined": true,
       "grounded": true,
       "dropped_citations": 0,
-      "latency_ms": 12815.0,
-      "input_tokens": 2834,
-      "output_tokens": 18,
+      "sources_cited": 0,
+      "sources_supplied": 8,
+      "latency_ms": 9859.1,
+      "input_tokens": 2850,
+      "output_tokens": 23,
       "correct": true,
       "question": "Which Kinect sensor settings were used to record the Human3.6M sequences?",
-      "answer": "Insufficient evidence"
+      "answer": "Insufficient evidence",
+      "cited": []
     }
   ]
 }
