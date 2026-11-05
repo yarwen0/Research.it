@@ -399,6 +399,185 @@
         }
       }
     },
+    "/api/projects/{project_id}/index": {
+      "get": {
+        "tags": [
+          "retrieval"
+        ],
+        "summary": "Index Status Endpoint",
+        "description": "Whether a project's papers can be searched with the configured model.\n\nA project indexed under a different embedding model is not searchable\nuntil it is re-indexed: vectors from two models are not comparable.",
+        "operationId": "index_status_endpoint_api_projects__project_id__index_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/search": {
+      "get": {
+        "tags": [
+          "retrieval"
+        ],
+        "summary": "Search Endpoint",
+        "description": "Passages from a project's papers, best first, with no LLM involved.\n\nStatus codes:\n    404: no such project\n    409: the project has no passages for the configured embedding model",
+        "operationId": "search_endpoint_api_projects__project_id__search_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "What to search for.",
+              "title": "Q"
+            },
+            "description": "What to search for."
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "K"
+            }
+          },
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hybrid",
+                "dense",
+                "lexical"
+              ],
+              "type": "string",
+              "default": "hybrid",
+              "title": "Strategy"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{project_id}/ask": {
+      "post": {
+        "tags": [
+          "retrieval"
+        ],
+        "summary": "Ask Endpoint",
+        "description": "Answer a question from a project's papers, citing the passages used.\n\nThe answer cites sources inline as [S1], [S2]; `sources` maps each id to\nits passage. Citations of sources the model was never shown are removed\nand listed in `dropped_citations`. `grounded` is false when the answer\nneither cites a source nor declines \u2014 return it to a user with a warning,\nor not at all.\n\nStatus codes:\n    404: no such project\n    409: the project has no passages for the configured embedding model\n    502: the language model provider failed",
+        "operationId": "ask_endpoint_api_projects__project_id__ask_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
@@ -440,6 +619,200 @@
   },
   "components": {
     "schemas": {
+      "AnswerSource": {
+        "properties": {
+          "chunk_id": {
+            "type": "integer",
+            "title": "Chunk Id"
+          },
+          "paper_id": {
+            "type": "string",
+            "title": "Paper Id",
+            "description": "The paper's external id, e.g. its arXiv id."
+          },
+          "paper_title": {
+            "type": "string",
+            "title": "Paper Title"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "profile"
+            ],
+            "title": "Kind",
+            "description": "A slice of the paper's text, or its structured record rendered as prose."
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Fused RRF score in hybrid mode; cosine similarity or BM25 otherwise."
+          },
+          "dense_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dense Rank",
+            "description": "1-based rank in the dense list."
+          },
+          "lexical_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lexical Rank",
+            "description": "1-based rank in the BM25 list."
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The id the answer cites it by, e.g. S1."
+          },
+          "cited": {
+            "type": "boolean",
+            "title": "Cited"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "paper_id",
+          "paper_title",
+          "kind",
+          "text",
+          "score",
+          "id",
+          "cited"
+        ],
+        "title": "AnswerSource",
+        "description": "A passage the answer was allowed to cite."
+      },
+      "AskRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "k": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "K",
+            "description": "Passages to answer from.",
+            "default": 8
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AskRequest",
+        "description": "A question about a project's papers."
+      },
+      "AskResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Cites sources inline as [S1], [S2]."
+          },
+          "insufficient_evidence": {
+            "type": "boolean",
+            "title": "Insufficient Evidence",
+            "description": "The model found no answer in the sources and said so."
+          },
+          "grounded": {
+            "type": "boolean",
+            "title": "Grounded",
+            "description": "Declined, or cited at least one real source. False means do not trust it."
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "cited": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cited"
+          },
+          "dropped_citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped Citations",
+            "description": "Citations of sources the model was never given, removed from the answer."
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "embedding_model": {
+            "type": "string",
+            "title": "Embedding Model"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageSummary"
+          },
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "question",
+          "answer",
+          "insufficient_evidence",
+          "grounded",
+          "strategy",
+          "embedding_model",
+          "usage",
+          "latency_ms"
+        ],
+        "title": "AskResponse",
+        "description": "A grounded answer and the evidence behind it."
+      },
       "DetailedHealthResponse": {
         "properties": {
           "status": {
@@ -675,6 +1048,45 @@
         ],
         "title": "HealthResponse",
         "description": "Liveness check."
+      },
+      "IndexStatusResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "embedding_model": {
+            "type": "string",
+            "title": "Embedding Model",
+            "description": "The embedding model this server is configured with."
+          },
+          "indexed_chunks": {
+            "type": "integer",
+            "title": "Indexed Chunks",
+            "description": "Passages indexed with that model."
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "models": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Models",
+            "description": "Passages per embedding model the project was indexed with."
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "embedding_model",
+          "indexed_chunks",
+          "ready"
+        ],
+        "title": "IndexStatusResponse",
+        "description": "Whether a project can be searched with the configured embedding model."
       },
       "JobMetricsResponse": {
         "properties": {
@@ -1082,6 +1494,127 @@
         ],
         "title": "ReviewSummary",
         "description": "One entry in the review list."
+      },
+      "SearchHit": {
+        "properties": {
+          "chunk_id": {
+            "type": "integer",
+            "title": "Chunk Id"
+          },
+          "paper_id": {
+            "type": "string",
+            "title": "Paper Id",
+            "description": "The paper's external id, e.g. its arXiv id."
+          },
+          "paper_title": {
+            "type": "string",
+            "title": "Paper Title"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "profile"
+            ],
+            "title": "Kind",
+            "description": "A slice of the paper's text, or its structured record rendered as prose."
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Fused RRF score in hybrid mode; cosine similarity or BM25 otherwise."
+          },
+          "dense_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dense Rank",
+            "description": "1-based rank in the dense list."
+          },
+          "lexical_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lexical Rank",
+            "description": "1-based rank in the BM25 list."
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "paper_id",
+          "paper_title",
+          "kind",
+          "text",
+          "score"
+        ],
+        "title": "SearchHit",
+        "description": "A retrieved passage and where it came from."
+      },
+      "SearchResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "hybrid",
+              "dense",
+              "lexical"
+            ],
+            "title": "Strategy"
+          },
+          "embedding_model": {
+            "type": "string",
+            "title": "Embedding Model"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "query",
+          "strategy",
+          "embedding_model"
+        ],
+        "title": "SearchResponse"
       },
       "StageUsage": {
         "properties": {

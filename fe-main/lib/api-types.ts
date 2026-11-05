@@ -259,6 +259,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Index Status Endpoint
+         * @description Whether a project's papers can be searched with the configured model.
+         *
+         *     A project indexed under a different embedding model is not searchable
+         *     until it is re-indexed: vectors from two models are not comparable.
+         */
+        get: operations["index_status_endpoint_api_projects__project_id__index_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Endpoint
+         * @description Passages from a project's papers, best first, with no LLM involved.
+         *
+         *     Status codes:
+         *         404: no such project
+         *         409: the project has no passages for the configured embedding model
+         */
+        get: operations["search_endpoint_api_projects__project_id__search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Endpoint
+         * @description Answer a question from a project's papers, citing the passages used.
+         *
+         *     The answer cites sources inline as [S1], [S2]; `sources` maps each id to
+         *     its passage. Citations of sources the model was never shown are removed
+         *     and listed in `dropped_citations`. `grounded` is false when the answer
+         *     neither cites a source nor declines — return it to a user with a warning,
+         *     or not at all.
+         *
+         *     Status codes:
+         *         404: no such project
+         *         409: the project has no passages for the configured embedding model
+         *         502: the language model provider failed
+         */
+        post: operations["ask_endpoint_api_projects__project_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -303,6 +381,108 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AnswerSource
+         * @description A passage the answer was allowed to cite.
+         */
+        AnswerSource: {
+            /** Chunk Id */
+            chunk_id: number;
+            /**
+             * Paper Id
+             * @description The paper's external id, e.g. its arXiv id.
+             */
+            paper_id: string;
+            /** Paper Title */
+            paper_title: string;
+            /** Section */
+            section?: string | null;
+            /**
+             * Kind
+             * @description A slice of the paper's text, or its structured record rendered as prose.
+             * @enum {string}
+             */
+            kind: "text" | "profile";
+            /** Text */
+            text: string;
+            /**
+             * Score
+             * @description Fused RRF score in hybrid mode; cosine similarity or BM25 otherwise.
+             */
+            score: number;
+            /**
+             * Dense Rank
+             * @description 1-based rank in the dense list.
+             */
+            dense_rank?: number | null;
+            /**
+             * Lexical Rank
+             * @description 1-based rank in the BM25 list.
+             */
+            lexical_rank?: number | null;
+            /**
+             * Id
+             * @description The id the answer cites it by, e.g. S1.
+             */
+            id: string;
+            /** Cited */
+            cited: boolean;
+        };
+        /**
+         * AskRequest
+         * @description A question about a project's papers.
+         */
+        AskRequest: {
+            /** Question */
+            question: string;
+            /**
+             * K
+             * @description Passages to answer from.
+             * @default 8
+             */
+            k: number;
+        };
+        /**
+         * AskResponse
+         * @description A grounded answer and the evidence behind it.
+         */
+        AskResponse: {
+            /** Project Id */
+            project_id: string;
+            /** Question */
+            question: string;
+            /**
+             * Answer
+             * @description Cites sources inline as [S1], [S2].
+             */
+            answer: string;
+            /**
+             * Insufficient Evidence
+             * @description The model found no answer in the sources and said so.
+             */
+            insufficient_evidence: boolean;
+            /**
+             * Grounded
+             * @description Declined, or cited at least one real source. False means do not trust it.
+             */
+            grounded: boolean;
+            /** Sources */
+            sources?: components["schemas"]["AnswerSource"][];
+            /** Cited */
+            cited?: string[];
+            /**
+             * Dropped Citations
+             * @description Citations of sources the model was never given, removed from the answer.
+             */
+            dropped_citations?: string[];
+            /** Strategy */
+            strategy: string;
+            /** Embedding Model */
+            embedding_model: string;
+            usage: components["schemas"]["UsageSummary"];
+            /** Latency Ms */
+            latency_ms: number;
+        };
         /**
          * DetailedHealthResponse
          * @description Health check with the endpoint map.
@@ -420,6 +600,33 @@ export interface components {
             message: string;
             /** Version */
             version: string;
+        };
+        /**
+         * IndexStatusResponse
+         * @description Whether a project can be searched with the configured embedding model.
+         */
+        IndexStatusResponse: {
+            /** Project Id */
+            project_id: string;
+            /**
+             * Embedding Model
+             * @description The embedding model this server is configured with.
+             */
+            embedding_model: string;
+            /**
+             * Indexed Chunks
+             * @description Passages indexed with that model.
+             */
+            indexed_chunks: number;
+            /** Ready */
+            ready: boolean;
+            /**
+             * Models
+             * @description Passages per embedding model the project was indexed with.
+             */
+            models?: {
+                [key: string]: number;
+            };
         };
         /**
          * JobMetricsResponse
@@ -618,6 +825,62 @@ export interface components {
              * @default 0
              */
             num_papers: number;
+        };
+        /**
+         * SearchHit
+         * @description A retrieved passage and where it came from.
+         */
+        SearchHit: {
+            /** Chunk Id */
+            chunk_id: number;
+            /**
+             * Paper Id
+             * @description The paper's external id, e.g. its arXiv id.
+             */
+            paper_id: string;
+            /** Paper Title */
+            paper_title: string;
+            /** Section */
+            section?: string | null;
+            /**
+             * Kind
+             * @description A slice of the paper's text, or its structured record rendered as prose.
+             * @enum {string}
+             */
+            kind: "text" | "profile";
+            /** Text */
+            text: string;
+            /**
+             * Score
+             * @description Fused RRF score in hybrid mode; cosine similarity or BM25 otherwise.
+             */
+            score: number;
+            /**
+             * Dense Rank
+             * @description 1-based rank in the dense list.
+             */
+            dense_rank?: number | null;
+            /**
+             * Lexical Rank
+             * @description 1-based rank in the BM25 list.
+             */
+            lexical_rank?: number | null;
+        };
+        /** SearchResponse */
+        SearchResponse: {
+            /** Project Id */
+            project_id: string;
+            /** Query */
+            query: string;
+            /**
+             * Strategy
+             * @enum {string}
+             */
+            strategy: "hybrid" | "dense" | "lexical";
+            /** Embedding Model */
+            embedding_model: string;
+            /** Hits */
+            hits?: components["schemas"]["SearchHit"][];
         };
         /**
          * StageUsage
@@ -1003,6 +1266,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    index_status_endpoint_api_projects__project_id__index_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndexStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_endpoint_api_projects__project_id__search_get: {
+        parameters: {
+            query: {
+                /** @description What to search for. */
+                q: string;
+                k?: number;
+                strategy?: "hybrid" | "dense" | "lexical";
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_endpoint_api_projects__project_id__ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
                 };
             };
             /** @description Validation Error */
