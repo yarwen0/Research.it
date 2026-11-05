@@ -117,7 +117,9 @@ class ChunkStore:
             .where(Chunk.project_id == project_id)
             .group_by(Chunk.embedding_model)
         ).tuples()
-        return dict(rows)
+        # .all() first: a Result has .keys(), so dict() would treat it as a
+        # mapping instead of iterating its rows.
+        return dict(rows.all())
 
     def search(
         self,
