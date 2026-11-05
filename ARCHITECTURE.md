@@ -270,6 +270,32 @@ scripted tests could not:
 That run made 13 LLM calls: 126 s of model time, 92 s on the clock, because
 the specialists ran in parallel.
 
+### Outside agents get the same tools, read-only
+
+The corpus is also an MCP server ([`mcp_server/`](be-main/mcp_server)), so
+any agent — Claude, an IDE assistant, one built on Google's ADK — can search
+a run's papers, ask grounded questions, read structured records and list
+gaps without a bespoke integration. It reads through
+[`agents/data.py`](be-main/agents/data.py), the layer the built-in
+assistant's tools use: the two cannot drift into seeing the corpus
+differently. The assistant's tools render that data as text and record
+evidence; the MCP tools return it as structures.
+
+Every tool is read-only. Starting a research run — minutes of downloads and
+LLM spend — is not one of them, which keeps an outside agent's worst case to
+reading.
+
+Over stdio, stdout is the protocol, and one stray log line corrupts it; the
+entry point sends all logging to stderr. Over HTTP the server is mounted on
+the API only when `MCP_API_KEY` is set, behind a constant-time bearer token
+check — there is no unauthenticated mode. Tools run their blocking work in a
+thread, since over HTTP the event loop is the API's own, and a 20-second
+answer must not stall every other request.
+
+Checked end to end: a Google ADK agent on a local model, connected over
+streamable HTTP with the token, listed the runs, searched the right one and
+answered naming the paper.
+
 ### On Google Cloud, nothing holds a key
 
 The Cloud Run deployment ([`deploy/gcp`](deploy/gcp)) calls Gemini through
@@ -323,6 +349,7 @@ be-main/
 ├── telemetry/         LLM metering, pricing, rollups, trace export
 ├── retrieval/         Chunking, embeddings, BM25 + pgvector hybrid search, indexing
 ├── agents/            Research assistant: tools, ReAct loop, LangGraph graph
+├── mcp_server/        The corpus tools over MCP: stdio and streamable HTTP
 ├── evals/             Gap detection and retrieval benchmarks
 └── alembic/           Migrations
 
