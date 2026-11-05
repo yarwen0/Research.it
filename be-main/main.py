@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 
 import uvicorn
 from asgi_correlation_id import CorrelationIdMiddleware
@@ -11,9 +11,10 @@ from api.api import router as research_router
 from api.assistant import router as assistant_router
 from api.retrieval import router as retrieval_router
 from api.schemas import DetailedHealthResponse, HealthResponse
-from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
+from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, MCP_API_KEY, PORT
 from db.bootstrap import ensure_schema
 from logging_config import configure_logging, get_logger
+from mcp_server.server import mount_http
 from rate_limit import limiter, rate_limit_handler
 from telemetry.tracing import configure_tracing, shutdown_tracing
 
@@ -29,8 +30,10 @@ async def lifespan(_app: FastAPI):
     # Bring the schema up to date before serving, so a fresh clone or a new
     # container needs no separate migration step.
     ensure_schema()
-    logger.info("api_started", host=HOST, port=PORT)
-    yield
+    logger.info("api_started", host=HOST, port=PORT, mcp_http=mcp_sessions is not None)
+    # The MCP endpoint's session manager lives as long as the app does.
+    async with mcp_sessions.run() if mcp_sessions else nullcontext():
+        yield
     # Spans are exported in batches; flush the last one before exiting.
     shutdown_tracing()
     logger.info("api_stopped")
@@ -71,6 +74,9 @@ app.add_middleware(CorrelationIdMiddleware)
 app.include_router(research_router, prefix="/api", tags=["research"])
 app.include_router(retrieval_router, prefix="/api", tags=["retrieval"])
 app.include_router(assistant_router, prefix="/api", tags=["assistant"])
+
+# The corpus tools for outside agents, over MCP. Only with a token configured.
+mcp_sessions = mount_http(app, MCP_API_KEY) if MCP_API_KEY else None
 
 
 @app.get("/", response_model=HealthResponse)

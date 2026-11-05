@@ -130,6 +130,12 @@ DB_ECHO = _truthy(os.getenv("DB_ECHO"))
 # several workers booting at once should not all be driving DDL.
 AUTO_MIGRATE = not _truthy(os.getenv("AUTO_MIGRATE_DISABLED"))
 
+# --- MCP -------------------------------------------------------------------
+# Serve the corpus tools over MCP's streamable HTTP transport at /mcp/, with
+# this as the required bearer token. Unset, nothing is mounted: there is no
+# unauthenticated mode. The stdio transport (python -m mcp_server) needs none.
+MCP_API_KEY = _maybe("MCP_API_KEY")
+
 # --- Rate limiting ---------------------------------------------------------
 # A single /api/research call downloads dozens of PDFs and spends real LLM
 # budget, so the write endpoints are capped far tighter than the read ones.
