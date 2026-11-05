@@ -21,6 +21,7 @@ from api.arxiv import ArxivClient
 from api.review import ReviewManager
 from api.schemas import (
     GraphResponse,
+    JobMetricsResponse,
     JobResponse,
     ReviewListResponse,
     ReviewResponse,
@@ -36,7 +37,13 @@ from db.repositories import GraphRepository
 from db.session import session_scope
 from rate_limit import limiter
 from services.events import StatusType
-from services.jobs import JobNotFoundError, get_job, start_job, tail_events
+from services.jobs import (
+    JobNotFoundError,
+    get_job,
+    get_job_metrics,
+    start_job,
+    tail_events,
+)
 from services.research_pipeline import ResearchPipeline
 from utils.latex import (
     MAX_LATEX_BYTES,
@@ -189,6 +196,22 @@ async def get_job_endpoint(job_id: str):
     """
     try:
         return get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Job not found: {job_id}"
+        ) from exc
+
+
+@router.get("/jobs/{job_id}/metrics", response_model=JobMetricsResponse)
+async def get_job_metrics_endpoint(job_id: str):
+    """LLM usage for a research job: tokens, latency, throughput, cost.
+
+    Broken down by pipeline stage and by model, so the slow stage and the
+    expensive model are both visible. Readable while the job is running.
+    Costs are estimates at list prices; see `prices_checked` for their date.
+    """
+    try:
+        return get_job_metrics(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(
             status_code=404, detail=f"Job not found: {job_id}"

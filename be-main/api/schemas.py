@@ -59,6 +59,68 @@ class JobResponse(BaseModel):
     updated_at: str | None = None
 
 
+class UsageSummary(BaseModel):
+    """LLM usage over a set of calls."""
+
+    calls: int
+    errors: int
+    input_tokens: int
+    output_tokens: int
+    estimated_calls: int = Field(
+        description=(
+            "Calls whose token counts were estimated from text length because "
+            "the provider reported none."
+        )
+    )
+    cost_usd: float = Field(
+        description="Estimated cost of the priced calls, in USD, at list prices."
+    )
+    unpriced_calls: int = Field(
+        description="Calls to models missing from the price table; not in cost_usd."
+    )
+    latency_ms_total: float
+    latency_ms_p50: float | None = None
+    latency_ms_p95: float | None = None
+    output_tokens_per_second: float | None = Field(
+        default=None,
+        description="End to end: output tokens over request latency, chat calls only.",
+    )
+    decode_tokens_per_second: float | None = Field(
+        default=None,
+        description=(
+            "Output tokens over the model's own generation time, for providers "
+            "that report it (Ollama)."
+        ),
+    )
+
+
+class StageUsage(UsageSummary):
+    """Usage for one pipeline stage, e.g. extraction or reference_extraction."""
+
+    stage: str
+
+
+class ModelUsage(UsageSummary):
+    """Usage for one model and operation."""
+
+    provider: str
+    model: str
+    operation: Literal["chat", "embeddings"]
+
+
+class JobMetricsResponse(BaseModel):
+    """What a research job's LLM calls cost, overall and broken down."""
+
+    job_id: str
+    status: Literal["pending", "running", "completed", "failed"]
+    prices_checked: str = Field(
+        description="Date the price table behind cost_usd was last checked."
+    )
+    totals: UsageSummary
+    by_stage: list[StageUsage] = Field(default_factory=list)
+    by_model: list[ModelUsage] = Field(default_factory=list)
+
+
 class GraphNodeData(BaseModel):
     """A paper or author node, in the shape the graph renderer consumes."""
 

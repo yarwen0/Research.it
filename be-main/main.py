@@ -87,6 +87,7 @@ async def health_check():
         "service": "Research Gap Discovery Engine",
         "endpoints": {
             "research": "/api/research",
+            "job_metrics": "/api/jobs/{job_id}/metrics",
             "create_review": "/api/create_review",
             "reviews": "/api/reviews",
             "review": "/api/reviews/{review_id}",
