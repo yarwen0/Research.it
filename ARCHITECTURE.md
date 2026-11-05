@@ -143,6 +143,32 @@ rejected.
 into the documented shape before it is stored. Prompt compliance is a quality
 signal; it is not something the compile step can depend on.
 
+### Every LLM call is metered where it is made
+
+Tokens, latency, throughput and estimated cost are recorded inside the three
+provider clients ([`telemetry/llm.py`](be-main/telemetry/llm.py)), not at the
+call sites. Nine call sites span extraction, references, topics, reranking,
+datasets and reviews; instrumenting each would give every new one a chance to
+be missed. In the client, nothing can bypass it.
+
+Usage is what the provider reported — Gemini `usageMetadata` (thinking tokens
+billed as output), Ollama's eval counters, OpenRouter's `usage` — and an
+estimate only where nothing was reported, flagged so it cannot pass for a
+measurement. Ollama also reports its own decode time, so throughput comes in
+two kinds: decode tokens/sec (the model's speed) and end-to-end tokens/sec
+(what a caller waits through). On the development machine those differ by
+almost 3×, because a cold qwen2.5:7b spends most of a short call loading.
+
+Calls are attributed to a job and a stage through context variables, which
+reach worker threads only when the context is copied. The pipeline used
+`run_in_executor`, which does not copy it; under it every call ran
+unattributed. It now uses `asyncio.to_thread`, which does, and a test pins the
+difference.
+
+Each job is its own OpenTelemetry trace — job → paper → stage → LLM call, with
+`gen_ai.*` attributes — rather than a child of the request that started it,
+since the run outlives that request by minutes.
+
 ### Authors are scoped per project
 
 Author names in bibliographies are not reliable identity. A global author table
@@ -169,6 +195,7 @@ be-main/
 │   └── artifacts.py       On-disk run output
 ├── db/                Models, repositories, session, bootstrap
 ├── utils/             LaTeX, embeddings, charts, path containment
+├── telemetry/         LLM metering, pricing, rollups, trace export
 ├── evals/             Gap detection benchmark
 └── alembic/           Migrations
 
@@ -197,6 +224,9 @@ Stated plainly, because a reviewer will find them anyway:
   is N×, until `RATE_LIMIT_STORAGE_URI` points at Redis.
 - **Gap detection recall is 0.188** at the shipped output cap. Measured, with
   the trade-off curve in [`evals/README.md`](be-main/evals/README.md).
+- **LLM costs are estimates.** List prices from a dated table, applied to
+  free-tier calls too, so they show what a run would cost on the paid tier.
+  Gemini embeddings report no token counts and are estimated from length.
 - **mypy runs against a subset.** Pre-refactor modules are silenced by name in
   `pyproject.toml`; the list is meant to shrink.
 - **32 React Compiler lint findings are warnings, not errors.** Enabled by the
