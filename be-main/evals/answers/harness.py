@@ -49,6 +49,11 @@ def score(question: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
         "declined": declined,
         "grounded": answer["grounded"],
         "dropped_citations": len(answer["dropped_citations"]),
+        # How widely it cited. "Supported" is trivially true for an answer
+        # that cites every passage it was given, so the breadth is reported
+        # beside it.
+        "sources_cited": len(answer["cited_texts"]),
+        "sources_supplied": answer.get("sources_supplied", 0),
         "latency_ms": answer["latency_ms"],
         "input_tokens": answer["usage"].get("input_tokens", 0),
         "output_tokens": answer["usage"].get("output_tokens", 0),
@@ -83,6 +88,18 @@ def summarize(verdicts: Sequence[dict[str, Any]]) -> dict[str, Any]:
         },
         "grounded": rate(verdicts, "grounded"),
         "dropped_citations": sum(v["dropped_citations"] for v in verdicts),
+        "citations": {
+            "mean_sources_cited": round(sum(v["sources_cited"] for v in verdicts) / len(verdicts), 2)
+            if verdicts
+            else 0.0,
+            "cited_every_source": round(
+                sum(1 for v in verdicts if v["sources_supplied"] > 1 and v["sources_cited"] >= v["sources_supplied"])
+                / len(verdicts),
+                3,
+            )
+            if verdicts
+            else 0.0,
+        },
         "latency_ms_p50": round(percentile(latencies, 50) or 0, 1),
         "latency_ms_p95": round(percentile(latencies, 95) or 0, 1),
         "mean_input_tokens": round(sum(v["input_tokens"] for v in verdicts) / len(verdicts)) if verdicts else 0,

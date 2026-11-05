@@ -77,12 +77,20 @@ def main() -> int:
             "grounded": result.grounded,
             "dropped_citations": result.dropped_citations,
             "cited_texts": [cited[source_id] for source_id in result.cited],
+            "sources_supplied": len(result.sources),
             "latency_ms": result.latency_ms,
             "usage": result.usage,
         }
         verdict = score(question, answer)
         verdicts.append(verdict)
-        records.append({**verdict, "question": question["question"], "answer": result.answer})
+        records.append(
+            {
+                **verdict,
+                "question": question["question"],
+                "answer": result.answer,
+                "cited": result.cited,
+            }
+        )
         mark = "ok " if verdict["correct"] else "MISS"
         print(f"  {mark} {question['id']} {result.latency_ms / 1000:5.1f}s  {result.answer[:110]!r}")
 
