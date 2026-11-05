@@ -33,6 +33,20 @@ markupsafe==3.0.3
 structlog==26.1.0
 asgi-correlation-id==5.0.1
 
+# --- Telemetry ---
+# Spans for every job, stage and LLM call. Nothing is exported unless
+# OTEL_TRACES_EXPORTER is set, and the OTLP stack is imported only then.
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-semantic-conventions==0.66b2
+opentelemetry-exporter-otlp-proto-http==1.45.2
+opentelemetry-exporter-otlp-proto-common==1.45.2
+opentelemetry-exporter-otlp-common==0.66b2
+opentelemetry-exporter-http-transport==0.66b2
+opentelemetry-proto==1.45.2
+protobuf==7.36.2
+googleapis-common-protos==1.76.0
+
 # --- Config, data models & serialization ---
 pydantic==2.12.4
 pydantic-core==2.41.5
