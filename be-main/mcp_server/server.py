@@ -39,6 +39,7 @@ from core import create_llm_client
 from rate_limit import client_identifier
 from retrieval.embedder import ClientEmbedder
 from retrieval.hybrid import RetrievedChunk
+from retrieval.screening import Screening, withhold_instructions
 from services.rag import CorpusQA
 
 INSTRUCTIONS = """Research.it holds research runs: each is a set of arXiv papers on one topic, read, structured and indexed.
@@ -59,6 +60,15 @@ def _hit(chunk: RetrievedChunk) -> dict[str, Any]:
         "kind": chunk.kind,
         "text": chunk.text,
         "score": round(chunk.score, 6),
+    }
+
+
+def _withheld(chunk: RetrievedChunk, screening: Screening) -> dict[str, Any]:
+    return {
+        "paper_id": chunk.paper_id,
+        "paper_title": chunk.paper_title,
+        "section": chunk.section,
+        "reasons": screening.reasons,
     }
 
 
@@ -100,16 +110,22 @@ def build_server(
         query: str,
         k: int = 8,
         strategy: Literal["hybrid", "dense", "lexical"] = "hybrid",
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         """Passages from a run's papers that best match the query, best first.
 
         Hybrid search fuses BM25 and embedding similarity; it ranks the
-        answering passage first most often (see evals/retrieval).
+        answering passage first most often (see evals/retrieval). Passages
+        that read as instructions to a model are not returned: they are
+        listed under `withheld`, with the reason, instead.
         """
 
-        def search() -> list[dict[str, Any]]:
+        def search() -> dict[str, Any]:
             hits = project(project_id).passages(query, max(1, min(k, 20)), strategy=strategy)
-            return [_hit(hit) for hit in hits]
+            kept, withheld = withhold_instructions(hits, lambda hit: hit.text)
+            return {
+                "passages": [_hit(hit) for hit in kept],
+                "withheld": [_withheld(hit, screening) for hit, screening in withheld],
+            }
 
         return await asyncio.to_thread(search)
 
@@ -133,6 +149,7 @@ def build_server(
                     {"id": source.id, "cited": source.id in result.cited, **_hit(source.chunk)}
                     for source in result.sources
                 ],
+                "withheld": [_withheld(chunk, screening) for chunk, screening in result.withheld],
             }
 
         return await asyncio.to_thread(ask)

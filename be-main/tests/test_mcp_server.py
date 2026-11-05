@@ -66,11 +66,13 @@ class TestTools:
         assert entry["indexed_passages"] > 0
 
     async def test_search_papers(self, project_id):
-        hits = _content(
+        result = _content(
             await _call("search_papers", project_id=project_id, query="rmsprop learning rate", k=2)
         )
+        hits = result["passages"]
         assert "2.5e-4" in hits[0]["text"]
         assert hits[0]["paper_id"] == "1603.06937"
+        assert result["withheld"] == []
 
     async def test_ask_papers_returns_a_grounded_answer(self, project_id):
         llm = FakeLLMClient(['{"answer": "It uses rmsprop at 2.5e-4 [S1].", "insufficient_evidence": false}'])
