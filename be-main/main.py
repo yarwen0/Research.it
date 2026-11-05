@@ -13,10 +13,12 @@ from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
 from db.bootstrap import ensure_schema
 from logging_config import configure_logging, get_logger
 from rate_limit import limiter, rate_limit_handler
+from telemetry.tracing import configure_tracing, shutdown_tracing
 
 # Configured once, at the entry point. A library module doing this would
 # silently depend on being imported before anything else logs.
 configure_logging()
+configure_tracing()
 logger = get_logger(__name__)
 
 
@@ -27,6 +29,8 @@ async def lifespan(_app: FastAPI):
     ensure_schema()
     logger.info("api_started", host=HOST, port=PORT)
     yield
+    # Spans are exported in batches; flush the last one before exiting.
+    shutdown_tracing()
     logger.info("api_stopped")
 
 
