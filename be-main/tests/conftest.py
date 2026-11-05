@@ -7,11 +7,33 @@ tests and the suite still needs no services installed.
 from __future__ import annotations
 
 import pytest
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from db.models import Base
+
+
+@pytest.fixture(scope="session")
+def _span_exporter() -> InMemorySpanExporter:
+    # The global tracer provider can be installed once per process, so every
+    # test that inspects spans shares this one.
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
+    return exporter
+
+
+@pytest.fixture
+def spans(_span_exporter: InMemorySpanExporter) -> InMemorySpanExporter:
+    """Spans finished during the test, and only those."""
+    _span_exporter.clear()
+    return _span_exporter
 
 
 @pytest.fixture

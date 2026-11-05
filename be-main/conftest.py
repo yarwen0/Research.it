@@ -11,6 +11,11 @@ from pathlib import Path
 
 os.environ.setdefault("LLM_PROVIDER", "ollama")
 os.environ.pop("CORS_ORIGINS", None)
+# Set rather than popped: load_dotenv() never overrides a variable that is
+# already present, so an empty value keeps a developer's .env from changing
+# the price table or switching on span export mid-suite.
+os.environ["LLM_PRICES"] = ""
+os.environ["OTEL_TRACES_EXPORTER"] = "none"
 
 # Point the suite at a scratch database before `config` is imported and freezes
 # DATABASE_URL. Without this, tests would read and write the developer's real
