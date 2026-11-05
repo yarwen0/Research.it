@@ -1,0 +1,324 @@
+[
+ {
+  "id": "h01",
+  "answerable": true,
+  "question": "What learning rate was the stacked hourglass network trained with?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "learning rate of 2.5e-4"
+   }
+  ],
+  "expect_any": [
+   "2.5e-4",
+   "2.5 × 10^-4",
+   "2.5x10^-4",
+   "2.5 x 10^-4",
+   "0.00025",
+   "2.5e−4"
+  ]
+ },
+ {
+  "id": "h02",
+  "answerable": true,
+  "question": "How long does training the hourglass network take, and on what GPU?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "3 days on a 12 GB NVIDIA TitanX GPU"
+   }
+  ],
+  "expect_any": [
+   "3 days",
+   "three days"
+  ]
+ },
+ {
+  "id": "h03",
+  "answerable": true,
+  "question": "What elbow and wrist accuracy does the hourglass network reach on MPII?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "elbow accuracy is 91.2%"
+   }
+  ],
+  "expect_any": [
+   "91.2"
+  ]
+ },
+ {
+  "id": "h04",
+  "answerable": true,
+  "question": "How many images does the FLIC dataset contain?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "5003 images"
+   }
+  ],
+  "expect_any": [
+   "5003",
+   "5,003"
+  ]
+ },
+ {
+  "id": "h08",
+  "answerable": true,
+  "question": "What rotation and scaling augmentation is used to train the hourglass model?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "rotation (+/- 30 degrees)"
+   }
+  ],
+  "expect_any": [
+   "30 degrees",
+   "30°",
+   "30 °",
+   "±30",
+   "+/- 30",
+   "± 30"
+  ]
+ },
+ {
+  "id": "h10",
+  "answerable": true,
+  "question": "What fraction of annotated elbows and wrists are marked visible in the validation set?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "75% of the elbows and wrists"
+   }
+  ],
+  "expect_any": [
+   "75%",
+   "75 %",
+   "75 percent",
+   "three-quarters",
+   "three quarters"
+  ]
+ },
+ {
+  "id": "b01",
+  "answerable": true,
+  "question": "What top-5 error does the batch-normalized ensemble reach on ImageNet?",
+  "evidence": [
+   {
+    "paper": "batch_normal",
+    "text": "4.9% top-5"
+   }
+  ],
+  "expect_any": [
+   "4.9%",
+   "4.9 %",
+   "4.9 percent"
+  ]
+ },
+ {
+  "id": "b06",
+  "answerable": true,
+  "question": "How many times fewer training steps does batch normalization need to match Inception?",
+  "evidence": [
+   {
+    "paper": "batch_normal",
+    "text": "14 times fewer"
+   }
+  ],
+  "expect_any": [
+   "14 times",
+   "14x",
+   "14×",
+   "14 ×",
+   "fourteen"
+  ]
+ },
+ {
+  "id": "b07",
+  "answerable": true,
+  "question": "What initial learning rate did BN-x30 use?",
+  "evidence": [
+   {
+    "paper": "batch_normal",
+    "text": "0.045"
+   }
+  ],
+  "expect_any": [
+   "0.045"
+  ]
+ },
+ {
+  "id": "b10",
+  "answerable": true,
+  "question": "What accuracy does BN-x5-Sigmoid reach?",
+  "evidence": [
+   {
+    "paper": "batch_normal",
+    "text": "69.8%"
+   }
+  ],
+  "expect_any": [
+   "69.8"
+  ]
+ },
+ {
+  "id": "d01",
+  "answerable": true,
+  "question": "What MPJPE does DreamPose3D reach on Human3.6M with CPN-detected keypoints?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "29.5 23.4"
+   }
+  ],
+  "expect_any": [
+   "29.5"
+  ]
+ },
+ {
+  "id": "d02",
+  "answerable": true,
+  "question": "What optimizer and GPUs were used to train DreamPose3D?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "three A6000 GPUs"
+   }
+  ],
+  "expect_any": [
+   "A6000"
+  ]
+ },
+ {
+  "id": "d08",
+  "answerable": true,
+  "question": "Which Human3.6M subjects are held out for evaluation?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "S9, S11"
+   }
+  ],
+  "expect_all": [
+   "S9",
+   "S11"
+  ]
+ },
+ {
+  "id": "d10",
+  "answerable": true,
+  "question": "By how much does DreamPose3D improve on FinePOSE when a 2D detector is used?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "7.5% and 6.4%"
+   }
+  ],
+  "expect_any": [
+   "7.5%",
+   "7.5 %"
+  ]
+ },
+ {
+  "id": "b02",
+  "answerable": true,
+  "question": "What is internal covariate shift?",
+  "evidence": [
+   {
+    "paper": "batch_normal",
+    "text": "We define Internal Covariate Shift as"
+   }
+  ],
+  "expect_any": [
+   "distribution"
+  ]
+ },
+ {
+  "id": "d04",
+  "answerable": true,
+  "question": "What do the authors call the problem of movements that look alike but have different purposes?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "intent ambiguity"
+   }
+  ],
+  "expect_any": [
+   "intent ambiguity"
+  ]
+ },
+ {
+  "id": "h11",
+  "answerable": true,
+  "question": "Do the stacked hourglass modules reuse the same parameters?",
+  "evidence": [
+   {
+    "paper": "hourglass",
+    "text": "weights are not shared"
+   }
+  ],
+  "expect_any": [
+   "not shared",
+   "not share",
+   "separate weights",
+   "independent weights",
+   "don't share",
+   "do not share",
+   "no weight sharing"
+  ]
+ },
+ {
+  "id": "d07",
+  "answerable": true,
+  "question": "What do the authors plan to try next to make poses more realistic?",
+  "evidence": [
+   {
+    "paper": "dreampose",
+    "text": "physics-based priors"
+   }
+  ],
+  "expect_any": [
+   "physics"
+  ]
+ },
+ {
+  "id": "u01",
+  "answerable": false,
+  "question": "What is the carbon footprint of training DreamPose3D?"
+ },
+ {
+  "id": "u02",
+  "answerable": false,
+  "question": "How does the stacked hourglass network process audio input?"
+ },
+ {
+  "id": "u03",
+  "answerable": false,
+  "question": "Under what license is the batch normalization code released?"
+ },
+ {
+  "id": "u04",
+  "answerable": false,
+  "question": "How many dollars did it cost to train the batch-normalized Inception network?"
+ },
+ {
+  "id": "u05",
+  "answerable": false,
+  "question": "Which reinforcement learning algorithm does DreamPose3D use to train its denoiser?"
+ },
+ {
+  "id": "u06",
+  "answerable": false,
+  "question": "What accuracy does the hourglass network reach on the COCO keypoint benchmark?"
+ },
+ {
+  "id": "u07",
+  "answerable": false,
+  "question": "How does DreamPose3D fuse LiDAR point clouds with the 2D poses?"
+ },
+ {
+  "id": "u08",
+  "answerable": false,
+  "question": "Which Kinect sensor settings were used to record the Human3.6M sequences?"
+ }
+]
