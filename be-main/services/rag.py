@@ -13,6 +13,7 @@ so it is fenced as data and the prompt says so.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import time
@@ -56,9 +57,12 @@ ANSWER_FORMAT: dict[str, Any] = {
     },
 }
 
-# [S1], [S1, S3] or [S1; S3]. Bracketed plain numbers are left alone: they
-# are the papers' own references, not citations of a source.
-_CITATION = re.compile(r"\[\s*(S\d+(?:\s*[,;]\s*S\d+)*)\s*\]", re.IGNORECASE)
+@functools.cache
+def _citation_pattern(prefix: str) -> re.Pattern[str]:
+    """[S1], [S1, S3] or [S1; S3] for prefix "S". Bracketed plain numbers are
+    left alone: they are the papers' own references, not citations."""
+    item = rf"{re.escape(prefix)}\d+"
+    return re.compile(rf"\[\s*({item}(?:\s*[,;]\s*{item})*)\s*\]", re.IGNORECASE)
 
 
 class NotIndexedError(LookupError):
@@ -124,12 +128,15 @@ def render_sources(sources: list[Source]) -> str:
     )
 
 
-def validate_citations(answer: str, valid_ids: set[str]) -> tuple[str, list[str], list[str]]:
+def validate_citations(
+    answer: str, valid_ids: set[str], *, prefix: str = "S"
+) -> tuple[str, list[str], list[str]]:
     """Keep citations of sources the model was given; drop and report the rest.
 
     Returns the cleaned answer, the valid ids in order of first citation, and
     the ids that were dropped. Grouped citations come back one per bracket,
     "[S1, S3]" as "[S1][S3]", so a client renders every one the same way.
+    `prefix` is the id scheme: S for answer sources, E for agent evidence.
     """
     cited: list[str] = []
     dropped: list[str] = []
@@ -146,7 +153,7 @@ def validate_citations(answer: str, valid_ids: set[str]) -> tuple[str, list[str]
                 dropped.append(source_id)
         return "".join(kept)
 
-    cleaned = _CITATION.sub(replace, answer)
+    cleaned = _citation_pattern(prefix).sub(replace, answer)
     # A dropped citation can leave "word ." or a doubled space behind.
     cleaned = re.sub(r"[ \t]+([.,;:])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
