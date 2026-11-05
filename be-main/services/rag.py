@@ -57,6 +57,9 @@ ANSWER_FORMAT: dict[str, Any] = {
     },
 }
 
+_REFERENCE_NUMBER = re.compile(r"\s*\[\d+(?:\s*[,\u2013-]\s*\d+)*\]")
+
+
 @functools.cache
 def _citation_pattern(prefix: str) -> re.Pattern[str]:
     """[S1], [S1, S3] or [S1; S3] for prefix "S". Bracketed plain numbers are
@@ -137,6 +140,7 @@ def validate_citations(
     the ids that were dropped. Grouped citations come back one per bracket,
     "[S1, S3]" as "[S1][S3]", so a client renders every one the same way.
     `prefix` is the id scheme: S for answer sources, E for agent evidence.
+    Reference numbers copied from a paper ("[13]") are removed outright.
     """
     cited: list[str] = []
     dropped: list[str] = []
@@ -154,6 +158,10 @@ def validate_citations(
         return "".join(kept)
 
     cleaned = _citation_pattern(prefix).sub(replace, answer)
+    # Bare bracketed numbers are the papers' own reference numbers, copied
+    # out of a passage. They point into bibliographies a reader cannot see,
+    # and next to real citations they read as ones.
+    cleaned = _REFERENCE_NUMBER.sub("", cleaned)
     # A dropped citation can leave "word ." or a doubled space behind.
     cleaned = re.sub(r"[ \t]+([.,;:])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()

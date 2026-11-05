@@ -88,9 +88,14 @@ class TestValidateCitations:
         assert text == "Both agree [S2][S1][S3]."
         assert cited == ["S2", "S1", "S3"]
 
-    def test_leaves_the_papers_own_reference_numbers_alone(self):
-        text, cited, dropped = validate_citations("Batch normalization [13] is used [S1].", {"S1"})
-        assert text == "Batch normalization [13] is used [S1]."
+    def test_removes_the_papers_own_reference_numbers(self):
+        # Copied out of a passage, "[13]" points into a bibliography the
+        # reader cannot see, and beside real citations it reads as one.
+        text, cited, dropped = validate_citations(
+            "Batch normalization [13] is used [S1], building on earlier work [4, 5][7\u20139].",
+            {"S1"},
+        )
+        assert text == "Batch normalization is used [S1], building on earlier work."
         assert (cited, dropped) == (["S1"], [])
 
     def test_counts_each_source_once(self):
