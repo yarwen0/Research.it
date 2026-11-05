@@ -60,7 +60,7 @@ Each subproject has its own README with details:
 | Data      | Postgres / SQLite, SQLAlchemy 2, Alembic                                            |
 | Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
 | AI        | Gemini · OpenRouter · Ollama (local) — chat + embeddings                            |
-| Observability | structlog (JSON logs), per-request correlation ids                             |
+| Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
 | Infra     | Docker, Docker Compose, Fly.io (API), Vercel (web)                                  |
 
@@ -147,6 +147,7 @@ See [`be-main/.env.example`](be-main/.env.example) for every option.
 | POST   | `/api/research`               | Start a research run (SSE)           |
 | GET    | `/api/jobs/{job_id}`          | Status of a research job             |
 | GET    | `/api/jobs/{job_id}/events`   | Resume a run's stream (SSE)          |
+| GET    | `/api/jobs/{job_id}/metrics`  | LLM tokens, latency and cost per run |
 | POST   | `/api/create_review`          | Generate a literature review (SSE)   |
 | GET    | `/api/reviews`                | List generated reviews               |
 | GET    | `/api/reviews/{review_id}`    | Fetch one review                     |

@@ -44,6 +44,9 @@ All configuration is via environment variables (loaded from `.env`). See
 | GET    | `/`                         | Health check                       |
 | GET    | `/health`                   | Detailed health check              |
 | POST   | `/api/research`             | Run the research pipeline (SSE)    |
+| GET    | `/api/jobs/{job_id}`        | Status of a research job           |
+| GET    | `/api/jobs/{job_id}/events` | Resume a run's stream (SSE)        |
+| GET    | `/api/jobs/{job_id}/metrics` | LLM usage, latency and cost of a run |
 | POST   | `/api/create_review`        | Generate a literature review (SSE) |
 | GET    | `/api/reviews`              | List generated reviews             |
 | GET    | `/api/reviews/{review_id}`  | Fetch one review                   |
