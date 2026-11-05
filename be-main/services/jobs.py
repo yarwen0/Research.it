@@ -21,8 +21,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections.abc import AsyncGenerator, Sequence
-from typing import Any
+from collections.abc import AsyncGenerator, AsyncIterator, Sequence
+from typing import Any, Protocol
 
 from opentelemetry import trace
 from opentelemetry.context import Context
@@ -32,7 +32,6 @@ from sqlalchemy import select
 from db.models import Job, JobEvent, JobStatus, LLMCallRecord, Project
 from db.session import session_scope
 from services.events import PipelineEvent, StatusType
-from services.research_pipeline import ResearchPipeline
 from telemetry import LLMCall, collect_usage, rollup
 from telemetry.pricing import PRICES_CHECKED
 
@@ -50,6 +49,17 @@ IDLE_TIMEOUT_SECONDS = 900
 
 class JobNotFoundError(LookupError):
     """Raised when a job id does not exist."""
+
+
+class JobPipeline(Protocol):
+    """What the runner executes: a research run or an assistant turn.
+
+    Anything that emits PipelineEvents and names the project it works in.
+    """
+
+    project_id: str
+
+    def run(self) -> AsyncIterator[PipelineEvent]: ...
 
 
 def create_job(user_prompt: str, params: dict[str, Any]) -> str:
@@ -126,7 +136,7 @@ def _try_link_project(job_id: str, project_id: str) -> bool:
         return True
 
 
-async def run_job(job_id: str, pipeline: ResearchPipeline) -> None:
+async def run_job(job_id: str, pipeline: JobPipeline) -> None:
     """Execute a pipeline, persisting every event it emits.
 
     Runs detached from any request, so exceptions have nowhere to propagate —
@@ -154,7 +164,9 @@ async def run_job(job_id: str, pipeline: ResearchPipeline) -> None:
                     if linked:
                         span.set_attribute("researchit.project_id", pipeline.project_id)
 
-                if event.status == StatusType.ERROR and "Pipeline error" in event.message:
+                if event.status == StatusType.ERROR and (
+                    (event.result or {}).get("fatal") or "Pipeline error" in event.message
+                ):
                     failed = True
         except asyncio.CancelledError:
             # Shutdown, not failure. Record it so a tailing client is not left
@@ -179,9 +191,7 @@ async def run_job(job_id: str, pipeline: ResearchPipeline) -> None:
     logger.info("Job %s finished after %s events", job_id, sequence)
 
 
-def start_job(
-    user_prompt: str, params: dict[str, Any], pipeline: ResearchPipeline
-) -> str:
+def start_job(user_prompt: str, params: dict[str, Any], pipeline: JobPipeline) -> str:
     """Create a job and kick it off in the background."""
     job_id = create_job(user_prompt, params)
     task = asyncio.create_task(run_job(job_id, pipeline))

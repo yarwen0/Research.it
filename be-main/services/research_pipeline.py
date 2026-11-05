@@ -403,7 +403,7 @@ class ResearchPipeline:
                     # arXiv is throttling; every remaining topic fails the same
                     # way, so stop rather than grinding through them.
                     logger.error("Aborting research run: %s", exc)
-                    yield error(str(exc))
+                    yield error(str(exc), fatal=True)
                     return
 
             logger.info("Saving %s processed papers", len(self.processed_papers))
@@ -445,4 +445,4 @@ class ResearchPipeline:
 
         except Exception as exc:
             logger.error("Pipeline error: %s", exc, exc_info=True)
-            yield error(f"Pipeline error: {exc}")
+            yield error(f"Pipeline error: {exc}", fatal=True)

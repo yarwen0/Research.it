@@ -40,8 +40,10 @@ def progress(message: str, result: dict[str, Any] | None = None) -> PipelineEven
     return PipelineEvent(StatusType.PROGRESS, message, result)
 
 
-def error(message: str) -> PipelineEvent:
-    return PipelineEvent(StatusType.ERROR, message)
+def error(message: str, *, fatal: bool = False) -> PipelineEvent:
+    """An error event. `fatal` marks one that ends the run, as opposed to a
+    per-paper failure the run carries on past."""
+    return PipelineEvent(StatusType.ERROR, message, {"fatal": True} if fatal else None)
 
 
 def completed(message: str, result: dict[str, Any]) -> PipelineEvent:
