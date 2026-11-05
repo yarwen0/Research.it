@@ -205,6 +205,55 @@ class AskResponse(BaseModel):
     latency_ms: float
 
 
+class AssistantRequest(BaseModel):
+    """A message to the research assistant."""
+
+    message: str = Field(min_length=1, max_length=2000)
+    thread_id: str | None = Field(
+        default=None, description="Continue this conversation; omit to start a new one."
+    )
+
+    @field_validator("message")
+    @classmethod
+    def message_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("message must not be empty")
+        return stripped
+
+
+class ThreadSummary(BaseModel):
+    thread_id: str
+    title: str
+    messages: int
+    created_at: str
+    updated_at: str
+
+
+class ThreadListResponse(BaseModel):
+    threads: list[ThreadSummary] = Field(default_factory=list)
+
+
+class ThreadMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    payload: dict[str, Any] | None = Field(
+        default=None,
+        description="For an answer: its citations, the plan, the findings and the critique.",
+    )
+    job_id: str | None = Field(
+        default=None, description="The job whose events and LLM usage recorded this turn."
+    )
+    created_at: str
+
+
+class ThreadResponse(BaseModel):
+    thread_id: str
+    project_id: str
+    title: str
+    messages: list[ThreadMessage] = Field(default_factory=list)
+
+
 class GraphNodeData(BaseModel):
     """A paper or author node, in the shape the graph renderer consumes."""
 

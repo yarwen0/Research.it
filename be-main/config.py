@@ -146,6 +146,9 @@ RATE_LIMIT_COMPILE = _maybe("RATE_LIMIT_COMPILE") or "30/minute"
 # One answer is a query embedding plus one LLM call: far cheaper than a run,
 # but still real spend.
 RATE_LIMIT_ASK = _maybe("RATE_LIMIT_ASK") or "60/hour"
+# An assistant turn is a plan, a few tool-using specialists, a draft and a
+# critique: roughly ten LLM calls, so it sits between a question and a run.
+RATE_LIMIT_ASSISTANT = _maybe("RATE_LIMIT_ASSISTANT") or "20/hour"
 
 # Off by default: X-Forwarded-For is trivially spoofed unless something in
 # front of the app is guaranteed to overwrite it. Turn on when deployed behind

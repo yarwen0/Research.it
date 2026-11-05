@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.api import router as research_router
+from api.assistant import router as assistant_router
 from api.retrieval import router as retrieval_router
 from api.schemas import DetailedHealthResponse, HealthResponse
 from config import CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, HOST, PORT
@@ -69,6 +70,7 @@ app.add_middleware(CorrelationIdMiddleware)
 # Include routers
 app.include_router(research_router, prefix="/api", tags=["research"])
 app.include_router(retrieval_router, prefix="/api", tags=["retrieval"])
+app.include_router(assistant_router, prefix="/api", tags=["assistant"])
 
 
 @app.get("/", response_model=HealthResponse)
@@ -97,6 +99,7 @@ async def health_check():
             "graph": "/api/graph/{project_id}/",
             "search": "/api/projects/{project_id}/search",
             "ask": "/api/projects/{project_id}/ask",
+            "assistant": "/api/projects/{project_id}/assistant",
         }
     }
 
