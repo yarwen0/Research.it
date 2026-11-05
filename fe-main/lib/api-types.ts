@@ -337,6 +337,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assistant Endpoint
+         * @description Ask the research assistant a question about a project (SSE).
+         *
+         *     A supervisor delegates to specialists — literature, research gaps,
+         *     citations — that use the project's tools; a writer answers from what they
+         *     found, citing evidence as [E1], [E2]; a critic checks the answer against
+         *     that evidence and may send it back once. Every step streams as it
+         *     happens. The final event carries the answer, its citations, the plan and
+         *     the critique.
+         *
+         *     Pass `thread_id` to continue a conversation; follow-up questions see the
+         *     recent history.
+         *
+         *     Status codes:
+         *         404: no such project, or no such thread in it
+         *         409: the project has no indexed passages
+         */
+        post: operations["assistant_endpoint_api_projects__project_id__assistant_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Threads Endpoint
+         * @description A project's assistant conversations, most recently active first.
+         */
+        get: operations["list_threads_endpoint_api_projects__project_id__threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thread Endpoint
+         * @description One conversation, every message in order, answers with their evidence.
+         */
+        get: operations["get_thread_endpoint_api_threads__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -482,6 +556,19 @@ export interface components {
             usage: components["schemas"]["UsageSummary"];
             /** Latency Ms */
             latency_ms: number;
+        };
+        /**
+         * AssistantRequest
+         * @description A message to the research assistant.
+         */
+        AssistantRequest: {
+            /** Message */
+            message: string;
+            /**
+             * Thread Id
+             * @description Continue this conversation; omit to start a new one.
+             */
+            thread_id?: string | null;
         };
         /**
          * DetailedHealthResponse
@@ -929,6 +1016,59 @@ export interface components {
             /** Stage */
             stage: string;
         };
+        /** ThreadListResponse */
+        ThreadListResponse: {
+            /** Threads */
+            threads?: components["schemas"]["ThreadSummary"][];
+        };
+        /** ThreadMessage */
+        ThreadMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Content */
+            content: string;
+            /**
+             * Payload
+             * @description For an answer: its citations, the plan, the findings and the critique.
+             */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Job Id
+             * @description The job whose events and LLM usage recorded this turn.
+             */
+            job_id?: string | null;
+            /** Created At */
+            created_at: string;
+        };
+        /** ThreadResponse */
+        ThreadResponse: {
+            /** Thread Id */
+            thread_id: string;
+            /** Project Id */
+            project_id: string;
+            /** Title */
+            title: string;
+            /** Messages */
+            messages?: components["schemas"]["ThreadMessage"][];
+        };
+        /** ThreadSummary */
+        ThreadSummary: {
+            /** Thread Id */
+            thread_id: string;
+            /** Title */
+            title: string;
+            /** Messages */
+            messages: number;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
         /**
          * UsageSummary
          * @description LLM usage over a set of calls.
@@ -1368,6 +1508,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_endpoint_api_projects__project_id__assistant_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_threads_endpoint_api_projects__project_id__threads_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_endpoint_api_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
                 };
             };
             /** @description Validation Error */
