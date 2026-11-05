@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 
+from telemetry import llm_stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +27,7 @@ class DatasetValidator:
         """
         self.llm_client = llm_client
     
+    @llm_stage("dataset_validation")
     def validate_datasets(self, dataset_names: list[str]) -> dict[str, bool]:
         """
         Validate a batch of dataset names using LLM.

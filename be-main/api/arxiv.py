@@ -22,6 +22,7 @@ import fitz  # type: ignore  # PyMuPDF
 import numpy as np
 
 from core import OpenRouterClient, ReferenceParameterExtractorFallback
+from telemetry import llm_stage
 
 # Configure logging
 logging.basicConfig(
@@ -291,7 +292,8 @@ class ArxivClient:
         try:
             # Batch all texts including the query
             all_texts = [user_query, *paper_texts]
-            embeddings = self.openrouter_client.get_embeddings(all_texts, model=embedding_model)
+            with llm_stage("rerank"):
+                embeddings = self.openrouter_client.get_embeddings(all_texts, model=embedding_model)
             
             query_embedding = embeddings[0]
             paper_embeddings = embeddings[1:]
@@ -606,6 +608,7 @@ class TopicGenerator:
     def __init__(self, llm_client: OpenRouterClient):
         self.client = llm_client
 
+    @llm_stage("topic_expansion")
     def generate_related_topics(self, user_prompt: str, num_topics: int = 10) -> list[str]:
         """Return a list of related research topics for the supplied prompt."""
 
@@ -692,6 +695,7 @@ Return only the JSON object with the topics array."""
             topics.append(user_prompt.strip()[:200])
         return topics[:num_topics]
 
+    @llm_stage("gap_verbalization")
     def generate_paper_suggestions(self, gaps: list[dict], user_prompt: str, num_papers: int = 10) -> list[dict]:
         """Generate paper suggestions from research gaps."""
         

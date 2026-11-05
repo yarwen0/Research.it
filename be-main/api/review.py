@@ -21,6 +21,7 @@ from constants.prompts.review_system_prompt import REVIEW_SYSTEM_PROMPT
 from core import OpenRouterClient
 from db.repositories import ReviewRepository
 from db.session import session_scope
+from telemetry import llm_stage
 from utils.embeddings import EmbeddingManager
 from utils.latex_review import normalize_review_latex
 from utils.paths import DATA_DIR, resolve_data_path
@@ -372,6 +373,7 @@ class ReviewManager:
         
         return all_chunks
     
+    @llm_stage("review_retrieval")
     def _select_relevant_chunks(
         self,
         chunks: list[dict[str, Any]],
@@ -472,6 +474,7 @@ class ReviewManager:
         
         return deduplicated_chunks
     
+    @llm_stage("review_generation")
     def _generate_latex_review(
         self,
         chunks: list[dict[str, Any]],
