@@ -163,6 +163,24 @@ jobs:
         # embeddings, so no model is needed.
         run: python -m evals.retrieval.run
 
+  infra:
+    name: Google Cloud Terraform validates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/gcp/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Formatting
+        run: terraform fmt -check -recursive
+      - name: Validate against the provider schema
+        # No backend and no credentials: this checks the configuration, not a
+        # live project.
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
   docker:
     name: Docker images build
     runs-on: ubuntu-latest
