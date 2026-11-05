@@ -119,6 +119,21 @@ truststore==0.10.5
 distro==1.9.0
 packaging==26.2
 
+# --- MCP ---
+# The corpus tools for outside agents, over stdio and streamable HTTP. The
+# 1.27 line is the newest that runs on the Starlette FastAPI is pinned to.
+mcp==1.27.2
+sse-starlette==3.0.3
+pydantic-settings==2.15.0
+python-multipart==0.0.33
+httpx-sse==0.4.3
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==2026.9.1
+attrs==26.1.0
+pyjwt==2.15.1
+
 # --- Embeddings & ML (reranking, similarity) ---
 numpy==1.26.4
 scikit-learn==1.5.2
