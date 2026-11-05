@@ -227,6 +227,49 @@ A project with nothing indexed is refused before any model call. The live
 check against a real corpus refused the one question its papers could not
 answer, and still cited the passage that said what the papers did use.
 
+### Agents act in JSON, and the critic is advisory
+
+The research assistant ([`agents/`](be-main/agents)) is a LangGraph state
+graph: a supervisor decides which specialists a question needs — literature,
+research gaps, citations — and they run in parallel, each a ReAct loop over
+its own tools; a writer answers from what they found and a critic checks the
+answer against the evidence it cites, sending it back once.
+
+Tool use is schema-constrained JSON rather than each provider's native tool
+calling. Gemini, Ollama and OpenRouter each call tools differently, and a 7B
+local model does it unreliably; all of them can constrain output to a JSON
+schema. One loop, every provider.
+
+Evidence ids (`E1`, `E2`, ...) are assigned by the tools as they return facts,
+never by a model, and the final answer's citations are validated against
+them exactly as `/ask` validates its sources. Everything is bounded: four tool
+calls per specialist and then a call that may only finish, one revision, and
+LangGraph's recursion limit behind both, so a model that never converges
+costs a known number of calls.
+
+A turn runs on the job runner, like a research run: it survives a dropped
+connection, its stream resumes from any event, and its LLM calls are
+recorded per agent (`agent.plan`, `agent.literature`, ...). Context variables
+reach LangGraph's worker threads, so that attribution needed no plumbing.
+
+Running it on qwen2.5:7b against a real corpus found three problems the
+scripted tests could not:
+
+- A specialist "finished" with a statement of intent — "I have found several
+  passages, now I will analyse them" — and cited nothing, which kept its
+  passages from the writer. A specialist that cites nothing after its tools
+  returned evidence is now asked once to state its findings, and the writer
+  is given everything gathered, cited evidence first. The answer to the same
+  question went from describing only the gaps to covering both halves.
+- The model copied a paper's own reference numbers, "[4]" and "[13]", into
+  its answer, where they read as citations. They are now removed.
+- The critic rejected a claim its own evidence supported. So the verdict is
+  advisory: after the one revision the answer is returned, with whatever the
+  critic still objects to listed in `unresolved`, rather than withheld.
+
+That run made 13 LLM calls: 126 s of model time, 92 s on the clock, because
+the specialists ran in parallel.
+
 ### On Google Cloud, nothing holds a key
 
 The Cloud Run deployment ([`deploy/gcp`](deploy/gcp)) calls Gemini through
@@ -273,11 +316,13 @@ be-main/
 │   ├── jobs.py            Background execution and event tailing
 │   ├── gaps.py            Gap analysis → suggested papers
 │   ├── rag.py             Grounded answers with checked citations
+│   ├── assistant.py       Assistant turns on the job runner, conversations
 │   └── artifacts.py       On-disk run output
 ├── db/                Models, repositories, session, bootstrap
 ├── utils/             LaTeX, embeddings, charts, path containment
 ├── telemetry/         LLM metering, pricing, rollups, trace export
 ├── retrieval/         Chunking, embeddings, BM25 + pgvector hybrid search, indexing
+├── agents/            Research assistant: tools, ReAct loop, LangGraph graph
 ├── evals/             Gap detection and retrieval benchmarks
 └── alembic/           Migrations
 
@@ -308,6 +353,9 @@ Stated plainly, because a reviewer will find them anyway:
   is N×, until `RATE_LIMIT_STORAGE_URI` points at Redis.
 - **Gap detection recall is 0.188** at the shipped output cap. Measured, with
   the trade-off curve in [`evals/README.md`](be-main/evals/README.md).
+- **The assistant has no benchmark yet.** Retrieval is measured; the
+  assistant's answers have been checked by hand, on one question run twice.
+  On a 7B model its critic is noisy in both directions.
 - **Grounding is checked structurally, not semantically.** A citation must
   point at a passage the model was given; nothing yet checks that the passage
   supports the sentence citing it.
