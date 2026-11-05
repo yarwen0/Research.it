@@ -72,6 +72,17 @@ LOG_LEVEL = (_maybe("LOG_LEVEL") or "INFO").upper()
 # on by default wherever something is collecting logs.
 LOG_JSON = _truthy(os.getenv("LOG_JSON"))
 
+# --- Telemetry -------------------------------------------------------------
+# Where trace spans go: none, console, or otlp. Spans are created either way;
+# with "none" they are simply never exported, so tracing costs nothing until
+# it is switched on. `otlp` reads the standard OTEL_EXPORTER_OTLP_* variables.
+OTEL_TRACES_EXPORTER = (_maybe("OTEL_TRACES_EXPORTER") or "none").lower()
+OTEL_SERVICE_NAME = _maybe("OTEL_SERVICE_NAME") or "researchit-api"
+
+# Overrides or extends the LLM price table, in USD per million tokens:
+#   {"gemini-2.5-flash": {"input": 0.30, "output": 2.50}}
+LLM_PRICES = _maybe("LLM_PRICES")
+
 # --- Database --------------------------------------------------------------
 
 
