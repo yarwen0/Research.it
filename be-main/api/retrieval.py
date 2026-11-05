@@ -28,6 +28,7 @@ from db.session import session_scope
 from rate_limit import limiter
 from retrieval.embedder import ClientEmbedder
 from retrieval.hybrid import RetrievedChunk
+from retrieval.screening import screen
 from retrieval.store import ChunkStore
 from services.rag import CorpusQA, GroundedAnswer, NotIndexedError
 
@@ -61,6 +62,11 @@ def _hit(chunk: RetrievedChunk) -> dict:
     }
 
 
+def _screened_hit(chunk: RetrievedChunk) -> dict:
+    screening = screen(chunk.text)
+    return {**_hit(chunk), "flagged": screening.flagged, "flag_reasons": screening.reasons}
+
+
 def _answer(project_id: str, result: GroundedAnswer) -> dict:
     cited = set(result.cited)
     return {
@@ -75,6 +81,15 @@ def _answer(project_id: str, result: GroundedAnswer) -> dict:
         ],
         "cited": result.cited,
         "dropped_citations": result.dropped_citations,
+        "withheld": [
+            {
+                "paper_id": chunk.paper_id,
+                "paper_title": chunk.paper_title,
+                "section": chunk.section,
+                "reasons": screening.reasons,
+            }
+            for chunk, screening in result.withheld
+        ],
         "strategy": result.strategy,
         "embedding_model": result.embedding_model,
         "usage": result.usage,
@@ -127,7 +142,9 @@ async def search_endpoint(
         "query": q,
         "strategy": strategy,
         "embedding_model": qa.embedder.model_id,
-        "hits": [_hit(hit) for hit in hits],
+        # Search results go to a person, so suspicious passages are shown and
+        # marked rather than withheld; every path to a model withholds them.
+        "hits": [_screened_hit(hit) for hit in hits],
     }
 
 

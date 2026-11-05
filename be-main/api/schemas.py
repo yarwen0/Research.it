@@ -137,6 +137,11 @@ class SearchHit(BaseModel):
     )
     dense_rank: int | None = Field(default=None, description="1-based rank in the dense list.")
     lexical_rank: int | None = Field(default=None, description="1-based rank in the BM25 list.")
+    flagged: bool = Field(
+        default=False,
+        description="Reads as instructions to a model; withheld whenever passages go to an LLM.",
+    )
+    flag_reasons: list[str] = Field(default_factory=list)
 
 
 class SearchResponse(BaseModel):
@@ -181,6 +186,15 @@ class AnswerSource(SearchHit):
     cited: bool
 
 
+class WithheldSource(BaseModel):
+    """A retrieved passage kept out of the prompt because it reads as instructions."""
+
+    paper_id: str
+    paper_title: str
+    section: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+
+
 class AskResponse(BaseModel):
     """A grounded answer and the evidence behind it."""
 
@@ -198,6 +212,10 @@ class AskResponse(BaseModel):
     dropped_citations: list[str] = Field(
         default_factory=list,
         description="Citations of sources the model was never given, removed from the answer.",
+    )
+    withheld: list[WithheldSource] = Field(
+        default_factory=list,
+        description="Retrieved passages withheld from the model as possible prompt injection.",
     )
     strategy: str
     embedding_model: str
