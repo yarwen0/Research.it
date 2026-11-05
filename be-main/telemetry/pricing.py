@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 
 # https://ai.google.dev/gemini-api/docs/pricing (paid tier). Gemini output
 # prices include thinking tokens, which is why the clients count them as
-# output.
+# output. Vertex AI bills the same models per token and is costed from the same
+# rows, unchecked against Vertex's own price list; LLM_PRICES corrects either.
+# Vertex's text-embedding models are not in the table, so they report no cost.
 PRICES_CHECKED = "2026-11-05"
 
 

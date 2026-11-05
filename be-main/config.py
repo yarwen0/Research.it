@@ -35,7 +35,15 @@ def _int(key: str, default: int) -> int:
 
 GEMINI_API_KEY = _maybe("GEMINI_API_KEY")
 OPENROUTER_API_KEY = _maybe("OPENROUTER_API_KEY")
-LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama'; auto-detected when unset
+LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama' | 'vertex'; auto-detected when unset
+
+# Vertex AI (Gemini on Google Cloud). Enable with LLM_PROVIDER=vertex. Auth is
+# Application Default Credentials, so there is no key: on Cloud Run the
+# service account, locally `gcloud auth application-default login`.
+GOOGLE_CLOUD_PROJECT = _maybe("GOOGLE_CLOUD_PROJECT")  # defaults to the ADC project
+GOOGLE_CLOUD_LOCATION = _maybe("GOOGLE_CLOUD_LOCATION") or "us-central1"
+VERTEX_MODEL = _maybe("VERTEX_MODEL") or "gemini-2.5-flash-lite"
+VERTEX_EMBED_MODEL = _maybe("VERTEX_EMBED_MODEL") or "text-embedding-005"
 
 # Ollama (local models; no API key, no rate limits). Enable with LLM_PROVIDER=ollama.
 OLLAMA_BASE_URL = _maybe("OLLAMA_BASE_URL") or "http://localhost:11434"
@@ -146,7 +154,8 @@ TRUST_PROXY_HEADERS = _truthy(os.getenv("TRUST_PROXY_HEADERS"))
 
 NO_LLM_PROVIDER_MESSAGE = (
     "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
-    "(no key needed), or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
+    "(no key needed), LLM_PROVIDER=vertex for Vertex AI with Google Cloud "
+    "credentials, or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
     "or OPENROUTER_API_KEY in your .env file."
 )
 
@@ -159,7 +168,9 @@ def has_llm_provider() -> bool:
     touches an LLM — running migrations, most obviously — could not proceed
     without one.
     """
-    if (LLM_PROVIDER or "").strip().lower() == "ollama":
+    # Neither needs a key: Ollama is local, and Vertex resolves credentials
+    # when the client is built.
+    if (LLM_PROVIDER or "").strip().lower() in ("ollama", "vertex"):
         return True
     return bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
 

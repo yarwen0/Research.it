@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 
 from config import (
     GEMINI_API_KEY,
+    GOOGLE_CLOUD_LOCATION,
+    GOOGLE_CLOUD_PROJECT,
     LLM_PROVIDER,
     NO_LLM_PROVIDER_MESSAGE,
     OLLAMA_BASE_URL,
@@ -21,6 +23,8 @@ from config import (
     OLLAMA_NUM_CTX,
     OPENROUTER_API_KEY,
     OPENROUTER_FOR_EMBEDDINGS,
+    VERTEX_EMBED_MODEL,
+    VERTEX_MODEL,
     has_llm_provider,
 )
 from constants.prompts.extractor_system_prompt import EXTRACTOR_SYSTEM_PROMPT
@@ -497,7 +501,7 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
     Factory that returns the configured LLM client.
 
     Selection order:
-      1. LLM_PROVIDER env (gemini | openrouter) — explicit override
+      1. LLM_PROVIDER env (gemini | openrouter | ollama | vertex) — explicit override
       2. GEMINI_API_KEY present → Gemini
       3. OPENROUTER_API_KEY present → OpenRouter
     """
@@ -510,6 +514,18 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
 
     if not provider:
         provider = "gemini" if GEMINI_API_KEY else "openrouter"
+
+    if provider == "vertex":
+        # Imported here: vertex_ai subclasses GeminiClient from this module.
+        from vertex_ai import VertexAIClient
+
+        return VertexAIClient(
+            model=model or VERTEX_MODEL,
+            embed_model=VERTEX_EMBED_MODEL,
+            location=GOOGLE_CLOUD_LOCATION,
+            project=GOOGLE_CLOUD_PROJECT,
+            timeout=timeout,
+        )
 
     if provider == "ollama":
         return OllamaClient(
