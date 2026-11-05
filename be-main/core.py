@@ -67,6 +67,26 @@ def _record_openai_usage(call: LLMCall, parsed: dict) -> None:
         call.output_tokens = usage["completion_tokens"]
 
 
+# What an embedding is for. Retrieval models are trained asymmetrically — a
+# short query and the passage that answers it are embedded differently — and
+# each provider takes the hint in its own way. None means no hint, which is
+# what reranking and the review pipeline have always sent.
+EMBEDDING_TASKS = ("document", "query")
+
+_GEMINI_TASK_TYPES = {"document": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"}
+
+# Local models that expect the task as a text prefix. nomic-embed-text's model
+# card requires these; without them it embeds every text as a document.
+_PREFIXED_EMBED_MODELS = {
+    "nomic-embed-text": {"document": "search_document: ", "query": "search_query: "},
+}
+
+
+def _check_task(task: str | None) -> None:
+    if task is not None and task not in EMBEDDING_TASKS:
+        raise ValueError(f"Unknown embedding task {task!r}; expected one of {EMBEDDING_TASKS}")
+
+
 def _strip_unsupported_schema_keys(schema):
     """Recursively strip JSON-Schema fields that Gemini's responseSchema does not accept."""
     if isinstance(schema, dict):
@@ -244,11 +264,20 @@ class GeminiClient:
     # Gemini's batchEmbedContents accepts at most 100 texts per request.
     GEMINI_BATCH_EMBED_LIMIT = 100
 
-    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+    # The model retrieval embeddings come from. Pinned, unlike the reranking
+    # path below, because stored vectors are only comparable with query
+    # vectors from the same model.
+    embedding_model_id = "gemini-embedding-001"
+
+    def get_embeddings(
+        self, texts: list[str], model: str | None = None, *, task: str | None = None
+    ) -> list[list[float]]:
+        _check_task(task)
         # Optionally prefer OpenRouter for embeddings (explicit opt-in). Default
         # is Gemini embeddings so a Gemini-first setup works without relying on
-        # an OpenRouter quota.
-        if OPENROUTER_API_KEY and OPENROUTER_FOR_EMBEDDINGS:
+        # an OpenRouter quota. Never for retrieval (`task` set): falling back
+        # between two providers mid-corpus would mix vector spaces.
+        if OPENROUTER_API_KEY and OPENROUTER_FOR_EMBEDDINGS and task is None:
             try:
                 openrouter = OpenRouterClient(api_key=OPENROUTER_API_KEY, model="z-ai/glm-4.5-air:free")
                 or_model = model if (model and "/" in model) else "sentence-transformers/all-minilm-l12-v2"
@@ -259,7 +288,7 @@ class GeminiClient:
         if model and "/" in model and not model.startswith(("gemini-", "text-", "models/")):
             logger.info(f"Substituting embedding model {model!r} with gemini-embedding-001 (Gemini)")
             model = None
-        embed_model = model or "gemini-embedding-001"
+        embed_model = model or self.embedding_model_id
         if not embed_model.startswith("models/"):
             embed_model_full = f"models/{embed_model}"
         else:
@@ -283,6 +312,7 @@ class GeminiClient:
                     {
                         "model": embed_model_full,
                         "content": {"parts": [{"text": t}]},
+                        **({"taskType": _GEMINI_TASK_TYPES[task]} if task else {}),
                     }
                     for t in batch
                 ]
@@ -405,12 +435,22 @@ class OllamaClient:
                 raise ValueError(f"Empty content in Ollama response: {parsed}")
         return content
 
-    def get_embeddings(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+    @property
+    def embedding_model_id(self) -> str:
+        return self.embed_model
+
+    def get_embeddings(
+        self, texts: list[str], model: str | None = None, *, task: str | None = None
+    ) -> list[list[float]]:
         """Embed texts with the local embedding model.
 
         The ``model`` arg from callers names a hosted model id (OpenRouter/Gemini);
         we ignore it and always use the configured local embedding model.
         """
+        _check_task(task)
+        prefixes = _PREFIXED_EMBED_MODELS.get(self.embed_model.split(":", 1)[0], {})
+        if task in prefixes:
+            texts = [prefixes[task] + text for text in texts]
         logger.info(f"Ollama embeddings: {len(texts)} texts via {self.embed_model}")
         # Newer Ollama supports batch input on /api/embed.
         try:
@@ -530,17 +570,28 @@ class OpenRouterClient:
             except (KeyError, IndexError) as exc:  # pragma: no cover - defensive
                 raise ValueError(f"Unexpected OpenRouter response: {parsed}") from exc
     
-    def get_embeddings(self, texts: list[str], model: str = "sentence-transformers/all-minilm-l12-v2") -> list[list[float]]:
+    embedding_model_id = "sentence-transformers/all-minilm-l12-v2"
+
+    def get_embeddings(
+        self,
+        texts: list[str],
+        model: str = "sentence-transformers/all-minilm-l12-v2",
+        *,
+        task: str | None = None,
+    ) -> list[list[float]]:
         """
         Get embeddings for a list of texts using OpenRouter.
         
         Args:
             texts: List of text strings to embed
             model: Model identifier (default: sentence-transformers/all-minilm-l12-v2)
+            task: Accepted for interface parity and ignored; OpenRouter's
+                embedding endpoint takes no task hint.
         
         Returns:
             List of embedding vectors
         """
+        _check_task(task)
         # Log input statistics
         logger.info(f"Getting embeddings for {len(texts)} texts using model: {model}")
         text_lengths = [len(t) for t in texts]
