@@ -416,6 +416,61 @@ class LLMCallRecord(Base):
     )
 
 
+class AgentThread(Base):
+    """A conversation with the research assistant about one project."""
+
+    __tablename__ = "agent_threads"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # The opening question, shortened; what a thread list shows.
+    title: Mapped[str] = mapped_column(Text, default="")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, index=True
+    )
+
+    messages: Mapped[list[AgentMessage]] = relationship(
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AgentMessage.id",
+    )
+
+
+class AgentMessage(Base):
+    """One message in an assistant conversation.
+
+    The text is what was said; `payload` holds what an assistant answer was
+    built from — citations, the plan, the critique — and `job_id` points at
+    the job whose events and LLM usage recorded that turn.
+    """
+
+    __tablename__ = "agent_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_threads.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # "user" | "assistant"
+    content: Mapped[str] = mapped_column(Text)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), default=None
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    thread: Mapped[AgentThread] = relationship(back_populates="messages")
+
+
 class Review(Base):
     """A generated literature review."""
 
