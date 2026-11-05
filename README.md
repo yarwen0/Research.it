@@ -42,6 +42,11 @@ Given a research prompt (e.g. *"diffusion models for pose transfer"*) the pipeli
 
 Progress is streamed to the frontend over Server-Sent Events (SSE).
 
+Once a run is indexed its papers can be questioned directly.
+`POST /api/projects/{project_id}/ask` answers from retrieved passages only,
+cites each claim to the passage behind it, and says so when the papers do not
+contain the answer.
+
 ## Repository layout
 
 ```
@@ -75,6 +80,7 @@ Each subproject has its own README with details:
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Compose, native and hosted setups |
 | [SECURITY.md](SECURITY.md) | Untrusted input surfaces and what constrains them |
 | [be-main/evals/README.md](be-main/evals/README.md) | Gap detection benchmark and results |
+| [be-main/evals/retrieval/README.md](be-main/evals/retrieval/README.md) | Retrieval benchmark and what it decided |
 | [ROADMAP.md](ROADMAP.md) | Planned work: telemetry, retrieval, agents, MCP, Google Cloud |
 
 ## Quickstart
@@ -156,6 +162,9 @@ See [`be-main/.env.example`](be-main/.env.example) for every option.
 | GET    | `/api/reviews/{review_id}`    | Fetch one review                     |
 | POST   | `/api/latex/compile`          | Compile LaTeX to PDF                 |
 | GET    | `/api/graph/{project_id}/`    | Fetch a project's reference graph    |
+| GET    | `/api/projects/{project_id}/index`  | Whether a project is searchable |
+| GET    | `/api/projects/{project_id}/search` | Hybrid passage search (no LLM)  |
+| POST   | `/api/projects/{project_id}/ask`    | Grounded answer with citations  |
 
 Interactive API docs are available at `http://127.0.0.1:8000/docs` once the
 backend is running.
@@ -215,6 +224,27 @@ randomises string hashing per process. Fixed, and pinned by a test that runs
 the finder under several `PYTHONHASHSEED` values.
 
 [Full methodology, per-type numbers, and an error analysis.](be-main/evals/README.md)
+
+## Does retrieval find the right passage?
+
+Also measured. [`be-main/evals/retrieval/`](be-main/evals/retrieval/README.md)
+scores 35 labelled questions over three papers, using real embeddings that
+are committed so the benchmark runs offline in CI:
+
+```bash
+cd be-main && python -m evals.retrieval.run
+```
+
+| Strategy | hit@1 | hit@5 | MRR |
+|---|---:|---:|---:|
+| **hybrid: BM25 + dense, fused (shipped)** | **0.743** | **0.914** | **0.810** |
+| dense only | 0.571 | 0.914 | 0.717 |
+| BM25 only | 0.571 | 0.886 | 0.701 |
+
+Dense and hybrid find the same passages by rank 5; fusion puts the answer
+*first* for 26 of 35 questions against 20. The benchmark also set the
+per-paper cap: without one, coverage on questions spanning several papers
+fell from 0.875 to 0.5.
 
 ## License
 

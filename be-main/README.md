@@ -52,6 +52,9 @@ All configuration is via environment variables (loaded from `.env`). See
 | GET    | `/api/reviews/{review_id}`  | Fetch one review                   |
 | POST   | `/api/latex/compile`        | Compile LaTeX to PDF               |
 | GET    | `/api/graph/{project_id}/`  | Fetch a project's reference graph  |
+| GET    | `/api/projects/{project_id}/index`  | Whether a project is searchable |
+| GET    | `/api/projects/{project_id}/search` | Hybrid passage search (no LLM)  |
+| POST   | `/api/projects/{project_id}/ask`    | Grounded answer with citations  |
 
 ## Project structure
 
