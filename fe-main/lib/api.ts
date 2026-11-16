@@ -47,6 +47,39 @@ export class APIError extends Error {
 }
 
 /**
+ * Turn FastAPI's `detail` into one line: a message string, or the list of
+ * validation errors it returns for a malformed request body.
+ */
+function describeDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (typeof item?.msg === "string" ? item.msg : undefined))
+      .filter(Boolean);
+    if (messages.length) return messages.join("; ");
+  }
+  return undefined;
+}
+
+/**
+ * Build the error for a failed response, quoting what the backend said.
+ *
+ * The backend explains every failure in a JSON `detail`. `statusText` is no
+ * substitute: HTTP/2 has no reason phrase, so behind any hosting provider it
+ * is an empty string, and the message used to end in a bare colon.
+ */
+export async function errorFromResponse(response: Response, context: string): Promise<APIError> {
+  let detail: string | undefined;
+  try {
+    detail = describeDetail((await response.json())?.detail);
+  } catch {
+    // Not JSON: a proxy's own error page, or no body at all.
+  }
+  const reason = detail || response.statusText || `HTTP ${response.status}`;
+  return new APIError(`${context}: ${reason}`, response.status, response);
+}
+
+/**
  * Submit a research request to the backend
  * Returns a StreamHandler that processes the SSE response
  * 
@@ -89,11 +122,7 @@ export async function submitResearch(
     });
 
     if (!response.ok) {
-      throw new APIError(
-        `API request failed: ${response.statusText}`,
-        response.status,
-        response
-      );
+      throw await errorFromResponse(response, "Research request failed");
     }
 
     // Check if response is SSE
@@ -156,7 +185,7 @@ export async function submitResearchAndCollect(
 export async function fetchGraph(projectId: string): Promise<GraphData> {
   const url = `${API_BASE_URL}/api/graph/${projectId}/`;
   const response = await fetch(url);
-  if (!response.ok) throw new APIError(`Graph fetch failed: ${response.statusText}`, response.status);
+  if (!response.ok) throw await errorFromResponse(response, "Graph fetch failed");
   const data: GraphResponse = await response.json();
   return data.graph_data;
 }
@@ -170,7 +199,7 @@ export async function fetchGraph(projectId: string): Promise<GraphData> {
 export async function fetchJob(jobId: string): Promise<JobResponse> {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
   if (!response.ok) {
-    throw new APIError(`Job fetch failed: ${response.statusText}`, response.status);
+    throw await errorFromResponse(response, "Job fetch failed");
   }
   return response.json();
 }
@@ -190,7 +219,7 @@ export async function resumeResearch(
   const response = await fetch(url, { headers: { Accept: "text/event-stream" } });
 
   if (!response.ok) {
-    throw new APIError(`Failed to resume job: ${response.statusText}`, response.status);
+    throw await errorFromResponse(response, "Failed to resume job");
   }
 
   const handler = new StreamHandler(callbacks);
@@ -223,11 +252,7 @@ export async function submitCreateReview(
     });
 
     if (!response.ok) {
-      throw new APIError(
-        `Failed to start review generation: ${response.statusText}`,
-        response.status,
-        response
-      );
+      throw await errorFromResponse(response, "Failed to start review generation");
     }
 
     const streamHandler = new StreamHandler(callbacks);
