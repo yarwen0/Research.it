@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { APIError, fetchGraph } from "./api";
+import { APIError, errorFromResponse, fetchGraph } from "./api";
 
 describe("APIError", () => {
   it("sets name and statusCode", () => {
@@ -42,5 +42,51 @@ describe("fetchGraph", () => {
     );
 
     await expect(fetchGraph("project-1")).resolves.toEqual(graphData);
+  });
+});
+
+describe("errorFromResponse", () => {
+  const json = (body: unknown, status: number, statusText = "") =>
+    new Response(JSON.stringify(body), {
+      status,
+      statusText,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("quotes the backend's detail", async () => {
+    const error = await errorFromResponse(
+      json({ detail: "Rate limit exceeded: 5 per 1 hour." }, 429),
+      "Research request failed",
+    );
+    expect(error.message).toBe("Research request failed: Rate limit exceeded: 5 per 1 hour.");
+    expect(error.statusCode).toBe(429);
+  });
+
+  it("joins FastAPI's validation errors", async () => {
+    const error = await errorFromResponse(
+      json(
+        {
+          detail: [
+            { loc: ["body", "user_prompt"], msg: "String should have at least 1 character" },
+            { loc: ["body", "num_topics"], msg: "Input should be greater than 0" },
+          ],
+        },
+        422,
+      ),
+      "Research request failed",
+    );
+    expect(error.message).toBe(
+      "Research request failed: String should have at least 1 character; Input should be greater than 0",
+    );
+  });
+
+  it("falls back to the status code when HTTP/2 leaves statusText empty", async () => {
+    const error = await errorFromResponse(new Response("<html>Bad gateway</html>", { status: 502 }), "Graph fetch failed");
+    expect(error.message).toBe("Graph fetch failed: HTTP 502");
+  });
+
+  it("uses statusText when there is no detail to quote", async () => {
+    const error = await errorFromResponse(json({}, 404, "Not Found"), "Job fetch failed");
+    expect(error.message).toBe("Job fetch failed: Not Found");
   });
 });
