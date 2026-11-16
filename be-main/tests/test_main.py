@@ -25,6 +25,15 @@ def test_detailed_health():
     assert "graph" in data["endpoints"]
 
 
+def test_cross_origin_clients_can_read_retry_and_request_headers():
+    response = client.get("/health", headers={"Origin": "https://frontend.example.com"})
+    exposed = {
+        h.strip().lower()
+        for h in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"retry-after", "x-ratelimit-remaining", "x-request-id"} <= exposed
+
+
 def test_research_rejects_blank_prompt():
     response = client.post(
         "/api/research",

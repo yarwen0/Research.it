@@ -62,6 +62,16 @@ app.add_middleware(
     allow_credentials=CORS_ALLOW_CREDENTIALS,  # off while origins are wildcarded
     allow_methods=["*"],
     allow_headers=["*"],
+    # Hosted, the frontend is on another origin, and a browser hides every
+    # response header outside a short safelist from cross-origin scripts.
+    # These are the ones the client acts on or quotes back in a bug report.
+    expose_headers=[
+        "Retry-After",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+        "X-Request-ID",
+    ],
 )
 
 # Outermost, so every log line from a request — including ones emitted by the
