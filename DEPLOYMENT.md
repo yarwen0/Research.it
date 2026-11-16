@@ -77,6 +77,11 @@ Set the project root to `fe-main` and add these environment variables:
 `NEXT_PUBLIC_*` variables are inlined at build time, so changing either one
 requires a redeploy, not just a restart.
 
+On Vercel, the build stops with an error if `NEXT_PUBLIC_API_URL` is missing,
+rather than shipping a site that sends every visitor's requests to
+`127.0.0.1`. `NEXT_PUBLIC_SITE_URL` is optional there: link previews fall
+back to the project's production domain.
+
 ### After deploying
 
 Point `CORS_ORIGINS` on the backend at the real frontend origin. Leaving it at
@@ -187,5 +192,5 @@ The project needs the Vertex AI API enabled and your account
 | `OTEL_TRACES_EXPORTER`     | backend   | `none`                   | `console`, `otlp` or `gcp` (Cloud Trace)   |
 | `LLM_PRICES`               | backend   | built-in table           | JSON price overrides for cost estimates    |
 | `NEXT_PUBLIC_API_URL`      | frontend  | `http://127.0.0.1:8000`  | Backend URL, inlined at build time         |
-| `NEXT_PUBLIC_SITE_URL`     | frontend  | —                        | Canonical URL for Open Graph metadata      |
+| `NEXT_PUBLIC_SITE_URL`     | frontend  | Vercel domain, on Vercel | Canonical URL for Open Graph metadata      |
 | `INSTALL_LATEX`            | build arg | `true`                   | Skip TeX Live for a ~700 MB smaller image  |
