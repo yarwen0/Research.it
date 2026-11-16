@@ -85,6 +85,24 @@ describe("errorFromResponse", () => {
     expect(error.message).toBe("Graph fetch failed: HTTP 502");
   });
 
+  it("quotes the request id of a server error so its logs can be found", async () => {
+    const response = new Response(JSON.stringify({ detail: "Failed to retrieve graph" }), {
+      status: 500,
+      headers: { "X-Request-ID": "3f2a9c" },
+    });
+    const error = await errorFromResponse(response, "Graph fetch failed");
+    expect(error.message).toBe("Graph fetch failed: Failed to retrieve graph (request 3f2a9c)");
+  });
+
+  it("leaves the request id off a client error", async () => {
+    const response = new Response(JSON.stringify({ detail: "Review not found" }), {
+      status: 404,
+      headers: { "X-Request-ID": "3f2a9c" },
+    });
+    const error = await errorFromResponse(response, "Review fetch failed");
+    expect(error.message).toBe("Review fetch failed: Review not found");
+  });
+
   it("uses statusText when there is no detail to quote", async () => {
     const error = await errorFromResponse(json({}, 404, "Not Found"), "Job fetch failed");
     expect(error.message).toBe("Job fetch failed: Not Found");

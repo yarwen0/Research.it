@@ -76,7 +76,11 @@ export async function errorFromResponse(response: Response, context: string): Pr
     // Not JSON: a proxy's own error page, or no body at all.
   }
   const reason = detail || response.statusText || `HTTP ${response.status}`;
-  return new APIError(`${context}: ${reason}`, response.status, response);
+  // Every log line the backend wrote for this request carries the id, so
+  // quoting it turns a server error into something that can be looked up.
+  const requestId = response.status >= 500 ? response.headers?.get("X-Request-ID") : null;
+  const reference = requestId ? ` (request ${requestId})` : "";
+  return new APIError(`${context}: ${reason}${reference}`, response.status, response);
 }
 
 /**
