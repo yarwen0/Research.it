@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { APIError, errorFromResponse, fetchGraph } from "./api";
+import { APIError, compileLatex, errorFromResponse, fetchGraph } from "./api";
 
 describe("APIError", () => {
   it("sets name and statusCode", () => {
@@ -88,5 +88,26 @@ describe("errorFromResponse", () => {
   it("uses statusText when there is no detail to quote", async () => {
     const error = await errorFromResponse(json({}, 404, "Not Found"), "Job fetch failed");
     expect(error.message).toBe("Job fetch failed: Not Found");
+  });
+});
+
+describe("compileLatex", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reports why the document did not compile", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Undefined control sequence \\citep" }), { status: 400 }),
+      ),
+    );
+
+    await expect(compileLatex("\\documentclass{article}")).rejects.toMatchObject({
+      name: "APIError",
+      statusCode: 400,
+      message: "Compilation failed: Undefined control sequence \\citep",
+    });
   });
 });

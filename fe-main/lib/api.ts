@@ -294,12 +294,7 @@ export async function compileLatex(latexContent: string): Promise<Blob> {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: response.statusText }));
-      throw new APIError(
-        errorData.error || `Compilation failed: ${response.statusText}`,
-        response.status,
-        response
-      );
+      throw await errorFromResponse(response, "Compilation failed");
     }
 
     return await response.blob();
