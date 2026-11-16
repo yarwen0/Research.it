@@ -61,6 +61,20 @@ function describeDetail(detail: unknown): string | undefined {
   return undefined;
 }
 
+const STARTING_UP_HINT = "If it has been idle it may still be starting up; try again in a minute.";
+
+/**
+ * The error for a request that never got a response.
+ *
+ * The browser's own message ("Failed to fetch") does not say where the request
+ * was going, and on a deploy the usual causes are a wrong NEXT_PUBLIC_API_URL
+ * or an API that a scale-to-zero host is still booting.
+ */
+function unreachable(error: unknown): APIError {
+  const reason = error instanceof Error ? error.message : "Unknown error";
+  return new APIError(`Could not reach the API at ${API_BASE_URL} (${reason}). ${STARTING_UP_HINT}`);
+}
+
 /**
  * Build the error for a failed response, quoting what the backend said.
  *
@@ -75,7 +89,11 @@ export async function errorFromResponse(response: Response, context: string): Pr
   } catch {
     // Not JSON: a proxy's own error page, or no body at all.
   }
-  const reason = detail || response.statusText || `HTTP ${response.status}`;
+  // A gateway error with nothing to quote came from the host, not the API.
+  const gateway = [502, 503, 504].includes(response.status) && !detail;
+  const reason = gateway
+    ? `the API did not respond (HTTP ${response.status}). ${STARTING_UP_HINT}`
+    : detail || response.statusText || `HTTP ${response.status}`;
   // Every log line the backend wrote for this request carries the id, so
   // quoting it turns a server error into something that can be looked up.
   const requestId = response.status >= 500 ? response.headers?.get("X-Request-ID") : null;
@@ -153,8 +171,7 @@ export async function submitResearch(
       throw error;
     }
     
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    throw new APIError(`Network error: ${errorMessage}`);
+    throw unreachable(error);
   }
 }
 
@@ -245,8 +262,9 @@ export async function submitCreateReview(
 ): Promise<StreamHandler> {
   const url = `${API_BASE_URL}/api/create_review`;
 
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: "POST",
       headers: {
         "Accept": "application/json",
@@ -254,22 +272,19 @@ export async function submitCreateReview(
       },
       body: JSON.stringify(request),
     });
-
-    if (!response.ok) {
-      throw await errorFromResponse(response, "Failed to start review generation");
-    }
-
-    const streamHandler = new StreamHandler(callbacks);
-    await streamHandler.processStream(response);
-    return streamHandler;
   } catch (error) {
-    if (error instanceof APIError) {
-      throw error;
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    throw new APIError(`Network error: ${errorMessage}`);
+    throw unreachable(error);
   }
+
+  if (!response.ok) {
+    throw await errorFromResponse(response, "Failed to start review generation");
+  }
+
+  // Outside the try: a stream that drops part-way did reach the API, and the
+  // handler has already reported it through onError.
+  const streamHandler = new StreamHandler(callbacks);
+  await streamHandler.processStream(response);
+  return streamHandler;
 }
 
 /**
@@ -307,7 +322,6 @@ export async function compileLatex(latexContent: string): Promise<Blob> {
       throw error;
     }
     
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    throw new APIError(`Network error: ${errorMessage}`);
+    throw unreachable(error);
   }
 }

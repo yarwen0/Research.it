@@ -81,8 +81,18 @@ describe("errorFromResponse", () => {
   });
 
   it("falls back to the status code when HTTP/2 leaves statusText empty", async () => {
+    const error = await errorFromResponse(new Response("Forbidden", { status: 403 }), "Graph fetch failed");
+    expect(error.message).toBe("Graph fetch failed: HTTP 403");
+  });
+
+  it("explains a gateway error from an idle host", async () => {
     const error = await errorFromResponse(new Response("<html>Bad gateway</html>", { status: 502 }), "Graph fetch failed");
-    expect(error.message).toBe("Graph fetch failed: HTTP 502");
+    expect(error.message).toMatch(/^Graph fetch failed: the API did not respond \(HTTP 502\)\. .*starting up/);
+  });
+
+  it("still quotes the API's own 503", async () => {
+    const error = await errorFromResponse(json({ detail: "No TeX toolchain is installed" }, 503), "Compilation failed");
+    expect(error.message).toBe("Compilation failed: No TeX toolchain is installed");
   });
 
   it("quotes the request id of a server error so its logs can be found", async () => {
@@ -126,6 +136,21 @@ describe("compileLatex", () => {
       name: "APIError",
       statusCode: 400,
       message: "Compilation failed: Undefined control sequence \\citep",
+    });
+  });
+});
+
+describe("an unreachable API", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("says where the request was going", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await expect(compileLatex("\\documentclass{article}")).rejects.toMatchObject({
+      name: "APIError",
+      message: expect.stringMatching(/^Could not reach the API at http.* \(Failed to fetch\)\. .*starting up/),
     });
   });
 });
