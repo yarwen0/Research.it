@@ -199,12 +199,12 @@ function ResearchDetailContent() {
           currentResponseId={id}
         />
         <SidebarInset>
-          <div className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+          <main id="main-content" tabIndex={-1} className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
               <p className="text-gray-600 dark:text-gray-400">Loading research...</p>
             </div>
-          </div>
+          </main>
         </SidebarInset>
       </>
     );
@@ -218,7 +218,7 @@ function ResearchDetailContent() {
           currentResponseId={id}
         />
         <SidebarInset>
-          <div className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+          <main id="main-content" tabIndex={-1} className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
             <div className="text-center">
               <div className="h-16 w-16 text-gray-400 mx-auto mb-4 text-4xl">🔍</div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -234,7 +234,7 @@ function ResearchDetailContent() {
                 ← Back to Home
               </button>
             </div>
-          </div>
+          </main>
         </SidebarInset>
       </>
     );
@@ -248,7 +248,7 @@ function ResearchDetailContent() {
       />
       <SidebarInset>
         <Nav title={showGraph && currentPrompt ? currentPrompt : undefined} />
-        <main className={`flex min-h-screen flex-col items-center p-4 py-8 pt-24 transition-all duration-500 ${!showGraph && !isLoading ? 'justify-center' : ''}`}>
+        <main id="main-content" tabIndex={-1} className={`flex min-h-screen flex-col items-center p-4 py-8 pt-24 transition-all duration-500 ${!showGraph && !isLoading ? 'justify-center' : ''}`}>
           <div className="w-full max-w-6xl flex flex-col items-center gap-8">
             <AnimatePresence mode="wait">
               {showGraph && (

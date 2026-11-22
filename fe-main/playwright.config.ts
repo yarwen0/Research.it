@@ -5,6 +5,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "accessibility.spec.ts",
   // The suite stubs the backend at the network layer, so nothing here needs a
   // running API, an LLM, or an arXiv round trip.
   fullyParallel: true,

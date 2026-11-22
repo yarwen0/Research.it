@@ -386,7 +386,25 @@ export default function RefGraphRenderer({
     };
 
     return (
-        <div className="w-full h-screen rounded-lg border border-border bg-card shadow-lg overflow-hidden relative">
+        <main id="main-content" tabIndex={-1} className="w-full h-screen rounded-lg border border-border bg-card shadow-lg overflow-hidden relative">
+            <h1 className="sr-only">Citation graph</h1>
+            <details className="absolute top-4 left-4 z-20 max-h-[60vh] w-64 overflow-auto rounded-lg border border-border bg-card p-3 text-sm text-foreground shadow-lg">
+                <summary className="cursor-pointer font-medium">Browse citations as a list</summary>
+                <ul className="mt-3 space-y-3">
+                    {rawNodes.map((node) => (
+                        <li key={node.data.id}>
+                            <button type="button" className="text-left underline" onClick={() => setSelectedNode(node.data.id)}>
+                                {node.data.title || node.data.label || node.data.id}
+                            </button>
+                            <ul className="ml-3 text-xs text-muted-foreground">
+                                {rawEdges.filter(edge => edge.data.source === node.data.id).map((edge, index) => (
+                                    <li key={index}>Cites: {rawNodes.find(target => target.data.id === edge.data.target)?.data.title || edge.data.target}</li>
+                                ))}
+                            </ul>
+                        </li>
+                    ))}
+                </ul>
+            </details>
             {/* Graph Controls */}
             <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
                 <button
@@ -470,7 +488,7 @@ export default function RefGraphRenderer({
 
             {/* Selected Node Info */}
             {selectedNode && graphRef.current && (
-                <div className="absolute bottom-4 left-4 z-10 bg-card border border-border rounded-lg p-4 shadow-lg max-w-md">
+                <div role="status" className="absolute bottom-4 left-4 z-10 bg-card border border-border rounded-lg p-4 shadow-lg max-w-md">
                     {graphRef.current.getNodeAttribute(selectedNode, 'nodeType') === 'author' ? (
                         <>
                             <h3 className="font-semibold text-sm mb-2 text-green-600">Author</h3>
@@ -500,6 +518,6 @@ export default function RefGraphRenderer({
                     backgroundSize: '20px 20px',
                 }}
             />
-        </div>
+        </main>
     );
 }

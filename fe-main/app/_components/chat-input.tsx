@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useId } from "react";
 import { Send, Paperclip, Zap, Clock, Turtle, ChevronDown } from "lucide-react";
 
 export type SpeedMode = 'fast' | 'medium' | 'slow';
@@ -31,6 +31,36 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [textareaHeight, setTextareaHeight] = useState(36);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (isDropdownOpen) {
+      dropdownRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    }
+  }, [isDropdownOpen]);
+
+  const closeMenu = () => {
+    setIsDropdownOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenu();
+    } else if (event.key === 'Tab') {
+      setIsDropdownOpen(false);
+      triggerRef.current?.focus();
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+    }
+  };
 
   const speedModes: { value: SpeedMode; label: string; icon: React.ReactNode; description: string }[] = [
     { value: 'fast', label: 'Fast', icon: <Zap size={14} />, description: '2 topics, 2 papers' },
@@ -71,59 +101,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
   };
-
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Don't interfere if user is already typing in an input/textarea
-      if (
-        document.activeElement?.tagName === 'INPUT' ||
-        document.activeElement?.tagName === 'TEXTAREA' ||
-        (document.activeElement as HTMLElement)?.contentEditable === 'true'
-      ) {
-        return;
-      }
-
-      // Don't interfere with keyboard shortcuts (Ctrl, Cmd, Alt combinations)
-      if (e.ctrlKey || e.metaKey || e.altKey) {
-        return;
-      }
-
-      // Don't interfere with special keys
-      if (
-        e.key === 'Tab' ||
-        e.key === 'Escape' ||
-        e.key === 'Enter' ||
-        e.key === 'ArrowUp' ||
-        e.key === 'ArrowDown' ||
-        e.key === 'ArrowLeft' ||
-        e.key === 'ArrowRight' ||
-        e.key === 'Backspace' ||
-        e.key === 'Delete'
-      ) {
-        return;
-      }
-
-      // Only handle printable characters
-      if (e.key.length === 1 && textareaRef.current && !isLoading) {
-        // Prevent the default behavior to avoid duplicate characters
-        e.preventDefault();
-        
-        // Focus the textarea
-        textareaRef.current.focus();
-        
-        // Add the typed character to the input
-        setInput(input + e.key);
-      }
-    };
-
-    // Add event listener to document
-    document.addEventListener('keypress', handleKeyPress);
-
-    // Cleanup
-    return () => {
-      document.removeEventListener('keypress', handleKeyPress);
-    };
-  }, [textareaRef, isLoading, setInput, input]);
 
   const getContainerStyles = () => {
     const baseStyles = "w-full flex flex-col transition-all duration-200";
@@ -216,10 +193,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
+                ref={triggerRef}
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setIsDropdownOpen(true);
+                  }
+                }}
                 disabled={isLoading}
-                aria-label="Research speed mode"
-                aria-haspopup="listbox"
+                aria-label={`Research speed mode: ${currentMode.label}`}
+                aria-haspopup="menu"
+                aria-controls={isDropdownOpen ? menuId : undefined}
                 aria-expanded={isDropdownOpen}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
@@ -233,14 +218,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
               {/* Dropdown Menu */}
               {isDropdownOpen && (
-                <div className="absolute bottom-full right-0 mb-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
+                <div id={menuId} role="menu" aria-label="Research speed mode" onKeyDown={handleMenuKeyDown} className="absolute bottom-full right-0 mb-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                   {speedModes.map((mode) => (
                     <button
                       key={mode.value}
                       type="button"
+                      role="menuitemradio"
+                      aria-checked={speedMode === mode.value}
+                      tabIndex={-1}
                       onClick={() => {
                         onSpeedModeChange(mode.value);
-                        setIsDropdownOpen(false);
+                        closeMenu();
                       }}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
                         speedMode === mode.value 
@@ -255,7 +243,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                         <div className={`text-sm font-medium ${speedMode === mode.value ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'}`}>
                           {mode.label}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
                           {mode.description}
                         </div>
                       </div>

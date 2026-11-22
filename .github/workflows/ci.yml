@@ -259,6 +259,8 @@ jobs:
         # The backend is stubbed at the network layer, so no API, LLM or arXiv
         # access is needed here.
         run: pnpm test:e2e
+      - name: WCAG 2.2 AA accessibility and keyboard checks
+        run: pnpm test:a11y
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

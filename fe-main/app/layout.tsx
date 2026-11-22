@@ -60,6 +60,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased bg-white dark:bg-gray-950 text-gray-900 dark:text-white">
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded focus:bg-white focus:p-3 focus:text-blue-700 focus:shadow-lg">
+          Skip to main content
+        </a>
         {children}
       </body>
     </html>

@@ -230,7 +230,7 @@ export default function Home() {
       />
       <SidebarInset>
         <Nav title={showGraph && currentPrompt ? currentPrompt : undefined} />
-        <main className={`flex min-h-screen flex-col items-center p-4 py-8 pt-24 transition-all duration-500 ${!showGraph && !isLoading ? 'justify-center' : ''}`}>
+        <main id="main-content" tabIndex={-1} className={`flex min-h-screen flex-col items-center p-4 py-8 pt-24 transition-all duration-500 ${!showGraph && !isLoading ? 'justify-center' : ''}`}>
           <div className="w-full max-w-6xl flex flex-col items-center gap-8">
 
         {/* Research Graph - shown after completion - MAIN FOCUS */}

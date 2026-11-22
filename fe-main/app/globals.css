@@ -82,4 +82,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid #1d4ed8;
+    outline-offset: 3px;
+  }
+  .dark :is(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline-color: #93c5fd;
+  }
 }

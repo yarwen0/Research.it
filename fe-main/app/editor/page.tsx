@@ -304,7 +304,8 @@ function EditorPageContent() {
         <Nav />
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 pt-20">
+        <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 pt-20">
+        <h1 className="sr-only">Literature review editor</h1>
         {/* Status Section */}
         <AnimatePresence>
           {(isGenerating || updates.length > 0) && (
@@ -454,7 +455,7 @@ function EditorPageContent() {
             )}
           </div>
         </motion.div>
-        </div>
+        </main>
       </div>
     </SidebarProvider>
   );

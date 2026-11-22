@@ -4,7 +4,7 @@ import GraphClient from './_components/graph-client';
 
 function GraphNotFound({ projectId }: { projectId: string }) {
     return (
-        <div className="flex min-h-screen items-center justify-center p-8">
+        <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center p-8">
             <div className="text-center">
                 <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                     Graph not found
@@ -13,7 +13,7 @@ function GraphNotFound({ projectId }: { projectId: string }) {
                     Could not load the citation graph for project {projectId}.
                 </p>
             </div>
-        </div>
+        </main>
     );
 }
 

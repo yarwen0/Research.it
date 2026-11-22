@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "generate:api-types": "cd ../be-main && \"$(test -x .venv/bin/python && echo .venv/bin/python || echo python3)\" scripts/gen_openapi.py ../fe-main/openapi.json && cd ../fe-main && openapi-typescript openapi.json -o lib/api-types.ts"
+    "generate:api-types": "cd ../be-main && \"$(test -x .venv/bin/python && echo .venv/bin/python || echo python3)\" scripts/gen_openapi.py ../fe-main/openapi.json && cd ../fe-main && openapi-typescript openapi.json -o lib/api-types.ts",
+    "test:a11y": "playwright test --config playwright.a11y.config.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -47,6 +48,7 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.62.1",
     "@types/cytoscape": "^3.31.0",
     "@types/d3-cloud": "^1.2.9",

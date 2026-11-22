@@ -14,6 +14,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -42,6 +43,7 @@ export function HistorySidebar({
 }: HistorySidebarProps) {
   const [responses, setResponses] = useState<ResearchResponse[]>([]);
   const router = useRouter();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     loadResponses();
@@ -80,6 +82,7 @@ export function HistorySidebar({
   };
 
   const handleResponseClick = (response: ResearchResponse) => {
+    if (isMobile) setOpenMobile(false);
     if (enableNavigation) {
       router.push(`/r/${response.id}`);
     } else {
@@ -123,26 +126,21 @@ export function HistorySidebar({
                     <SidebarMenuButton
                       onClick={() => handleResponseClick(response)}
                       isActive={currentResponseId === response.id}
-                      className="h-auto py-3 flex-col items-start group"
+                      className="h-auto py-3 pr-10 flex-col items-start group"
                     >
                       <div className="w-full">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <span className="text-sm font-medium line-clamp-2 flex-1 text-left">
                             {response.prompt}
                           </span>
-                          <span
-                            onClick={(e) => handleDelete(response.id, e)}
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 inline-flex items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </span>
+
                         </div>
                         
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
                           <span>{formatTimestamp(response.timestamp)}</span>
                           {response.duration && (
-                            <span className="text-gray-500 dark:text-gray-600">
+                            <span className="text-gray-600 dark:text-gray-400">
                               · {formatDuration(response.duration)}
                             </span>
                           )}
@@ -157,12 +155,20 @@ export function HistorySidebar({
                         </div>
                         
                         {(response.papers || response.processed_papers) && (
-                          <div className="mt-1 text-xs text-muted-foreground/70">
+                          <div className="mt-1 text-xs text-muted-foreground">
                             {response.total_papers || response.papers?.length || response.processed_papers?.length || 0} paper{((response.total_papers || response.papers?.length || response.processed_papers?.length || 0) !== 1) ? 's' : ''}
                           </div>
                         )}
                       </div>
                     </SidebarMenuButton>
+                    <button
+                      type="button"
+                      onClick={(event) => handleDelete(response.id, event)}
+                      aria-label={`Delete research: ${response.prompt}`}
+                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

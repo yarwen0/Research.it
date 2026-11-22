@@ -29,6 +29,9 @@ const LatexMonacoEditor = ({ value, onChange }: { value: string; onChange: (valu
         scrollBeyondLastLine: false,
         wordWrap: 'on',
         wrappingIndent: 'indent',
+        ariaLabel: 'LaTeX source editor',
+        accessibilitySupport: 'on',
+        tabFocusMode: true,
       }}
     />
   </div>
@@ -54,7 +57,7 @@ const LatexPreview = ({ pdfUrl, isCompiling, error }: { pdfUrl: string | null; i
           title="PDF Preview"
         />
       ) : (
-        <div className="text-center text-gray-400">
+        <div className="text-center text-gray-600">
           <p className="text-lg mb-2">No PDF preview available</p>
           <p className="text-sm">Click &quot;Compile&quot; to generate a PDF preview</p>
         </div>

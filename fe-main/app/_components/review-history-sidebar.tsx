@@ -24,6 +24,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 interface ReviewHistorySidebarProps {
@@ -37,6 +38,7 @@ export default function ReviewHistorySidebar({
 }: ReviewHistorySidebarProps) {
   const reviewStore = useReviewStore();
   const router = useRouter();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const allReviews = reviewStore.getAllReviews();
@@ -137,9 +139,6 @@ export default function ReviewHistorySidebar({
                           ? "ring-2 ring-blue-500 shadow-md"
                           : getStatusColor(review.status)
                       }`}
-                      onClick={() => {
-                        onSelectReview(review.id);
-                      }}
                     >
                       {/* Status Badge */}
                       <div className="absolute top-2 right-2">
@@ -148,11 +147,20 @@ export default function ReviewHistorySidebar({
 
                       {/* Paper Title */}
                       <h3 className="font-medium text-sm mb-1 pr-6 line-clamp-2">
-                        {review.paperTitle || `Review #${review.paperIndex}`}
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => {
+                            onSelectReview(review.id);
+                            if (isMobile) setOpenMobile(false);
+                          }}
+                        >
+                          {review.paperTitle || `Review #${review.paperIndex}`}
+                        </button>
                       </h3>
 
                       {/* Metadata */}
-                      <div className="space-y-1 text-xs text-gray-600 mb-2">
+                      <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400 mb-2">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           <span>{formatDate(review.createdAt)}</span>

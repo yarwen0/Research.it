@@ -43,7 +43,7 @@ export function Nav({ title }: NavProps) {
         {/* Center: Logo or research title */}
         <div className="flex-1 flex items-center justify-center">
           {title ? (
-            <h1 className="text-base font-semibold text-primary truncate text-center max-w-2xl px-4">
+            <h1 className="text-base font-semibold text-blue-600 dark:text-blue-400 truncate text-center max-w-2xl px-4">
               {title}
             </h1>
           ) : (
