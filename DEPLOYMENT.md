@@ -68,7 +68,10 @@ transaction-mode pooler. The API enables the `vector` extension itself.
 | `CORS_ORIGINS`   | The Vercel production URL, e.g. `https://researchit.vercel.app` |
 
 It deploys `be-main/Dockerfile`, and from then on redeploys each push to
-`main` that touches `be-main/`, once CI has passed on it.
+`main` that touches `be-main/`, once CI has passed on it. The build filter
+appears to look only at a push's newest commit: a push whose last commit
+touched only `fe-main/` skipped the backend commit before it. Deploy that
+by hand from the dashboard, or with `POST /v1/services/{id}/deploys`.
 
 ### Frontend → Vercel
 
