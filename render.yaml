@@ -1,0 +1,43 @@
+# Render Blueprint for the Research.it API (free plan).
+#
+# Render dashboard -> New -> Blueprint -> pick this repository. It asks for
+# the three values marked `sync: false`; nothing secret is stored here.
+# The frontend is on Vercel and the database on Neon: see DEPLOYMENT.md.
+services:
+  - type: web
+    name: researchit-api
+    runtime: docker
+    plan: free
+    region: oregon
+    rootDir: be-main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    # Deploy a push to main once CI has passed on it, and only when it
+    # touches the backend: free builds are metered in pipeline minutes.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - be-main/**
+      ignoredPaths:
+        - be-main/tests/**
+        - be-main/evals/**
+        - be-main/**/*.md
+    envVars:
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      # Neon's direct (not pooled) connection string. The free instance has
+      # no persistent disk, so anything kept on SQLite would vanish each time
+      # it sleeps.
+      - key: DATABASE_URL
+        sync: false
+      # The Vercel production origin, e.g. https://researchit.vercel.app.
+      - key: CORS_ORIGINS
+        sync: false
+      # Render's Cloudflare edge overwrites True-Client-IP on every request
+      # but keeps whatever X-Forwarded-For the client sent.
+      - key: CLIENT_IP_HEADER
+        value: true-client-ip
+      - key: LOG_JSON
+        value: "true"
