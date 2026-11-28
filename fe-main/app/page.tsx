@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatInput, { SpeedMode } from "./_components/chat-input";
 import StatusDisplay from "./_components/status-display";
@@ -7,7 +7,7 @@ import ResearchGraph from "./_components/research-graph";
 import ResearchResults from "./_components/research-results";
 import { Nav } from "./_components/nav";
 import { HistorySidebar } from "./_components/history-sidebar";
-import { submitResearch, fetchGraph } from "@/lib/api";
+import { submitResearch, fetchGraph, wakeApi } from "@/lib/api";
 import { SSEUpdate } from "@/lib/stream_handler";
 import { saveResponse, type ResearchResponse } from "@/lib/response-store";
 import { ensureFrontendFormat, transformPapers } from "@/lib/paper-transform";
@@ -37,6 +37,11 @@ export default function Home() {
   const [graphNodes, setGraphNodes] = useState<any[]>([]);
   const [graphEdges, setGraphEdges] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Start a sleeping API booting while the visitor is still typing.
+  useEffect(() => {
+    wakeApi();
+  }, []);
 
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading) return;
