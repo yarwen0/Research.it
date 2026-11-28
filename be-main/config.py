@@ -148,6 +148,13 @@ RATE_LIMIT_STORAGE_URI = _maybe("RATE_LIMIT_STORAGE_URI") or "memory://"
 RATE_LIMIT_DEFAULT = _maybe("RATE_LIMIT_DEFAULT") or "120/minute"
 RATE_LIMIT_RESEARCH = _maybe("RATE_LIMIT_RESEARCH") or "5/hour"
 RATE_LIMIT_REVIEW = _maybe("RATE_LIMIT_REVIEW") or "10/hour"
+
+# Upper bounds on one research run. Every paper is a PDF download and several
+# LLM calls, so without them a single request could queue thousands of papers
+# against a shared key. The frontend's largest preset is 10 topics x 5 papers.
+RESEARCH_MAX_TOPICS = _int("RESEARCH_MAX_TOPICS", 10)
+RESEARCH_MAX_PAPERS_PER_TOPIC = _int("RESEARCH_MAX_PAPERS_PER_TOPIC", 10)
+RESEARCH_MAX_SEARCH_MULTIPLIER = _int("RESEARCH_MAX_SEARCH_MULTIPLIER", 10)
 RATE_LIMIT_COMPILE = _maybe("RATE_LIMIT_COMPILE") or "30/minute"
 # One answer is a query embedding plus one LLM call: far cheaper than a run,
 # but still real spend.

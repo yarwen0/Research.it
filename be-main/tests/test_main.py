@@ -58,6 +58,23 @@ def test_research_rejects_non_positive_papers_per_topic():
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"num_topics": 11},
+        {"papers_per_topic": 11},
+        {"broad_search_multiplier": 11},
+        {"topics": [f"topic {i}" for i in range(11)]},
+    ],
+)
+def test_research_rejects_runs_over_the_size_caps(overrides):
+    # One request must not be able to queue thousands of papers against a
+    # shared LLM key.
+    payload = {"user_prompt": "machine learning", "num_topics": 2, "papers_per_topic": 2}
+    response = client.post("/api/research", json=payload | overrides)
+    assert response.status_code == 422
+
+
 def test_graph_returns_404_for_unknown_project():
     response = client.get("/api/graph/nonexistent-project-id/")
     assert response.status_code == 404

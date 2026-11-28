@@ -31,6 +31,9 @@ from config import (
     RATE_LIMIT_COMPILE,
     RATE_LIMIT_RESEARCH,
     RATE_LIMIT_REVIEW,
+    RESEARCH_MAX_PAPERS_PER_TOPIC,
+    RESEARCH_MAX_SEARCH_MULTIPLIER,
+    RESEARCH_MAX_TOPICS,
 )
 from core import ReferenceParameterExtractorFallback, create_llm_client
 from db.repositories import GraphRepository
@@ -80,6 +83,34 @@ class ResearchRequest(BaseModel):
     def counts_must_be_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("must be at least 1")
+        return v
+
+    @field_validator("num_topics")
+    @classmethod
+    def num_topics_within_cap(cls, v: int) -> int:
+        if v > RESEARCH_MAX_TOPICS:
+            raise ValueError(f"must be at most {RESEARCH_MAX_TOPICS}")
+        return v
+
+    @field_validator("topics")
+    @classmethod
+    def topics_within_cap(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and len(v) > RESEARCH_MAX_TOPICS:
+            raise ValueError(f"at most {RESEARCH_MAX_TOPICS} topics")
+        return v
+
+    @field_validator("papers_per_topic")
+    @classmethod
+    def papers_per_topic_within_cap(cls, v: int) -> int:
+        if v > RESEARCH_MAX_PAPERS_PER_TOPIC:
+            raise ValueError(f"must be at most {RESEARCH_MAX_PAPERS_PER_TOPIC}")
+        return v
+
+    @field_validator("broad_search_multiplier")
+    @classmethod
+    def multiplier_within_cap(cls, v: int) -> int:
+        if v > RESEARCH_MAX_SEARCH_MULTIPLIER:
+            raise ValueError(f"must be at most {RESEARCH_MAX_SEARCH_MULTIPLIER}")
         return v
 
 
