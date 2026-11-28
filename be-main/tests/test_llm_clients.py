@@ -339,3 +339,92 @@ class TestGeminiDailyQuota:
         with pytest.raises(RuntimeError, match="429"):
             client._post("https://example.invalid", {})
         assert len(calls) == 1
+
+
+class TestNvidia:
+    @staticmethod
+    def _client(**kw):
+        return core.NvidiaClient(api_key="k", model="m", embed_model="e", rpm=6000, **kw)
+
+    def test_chat_sends_the_schema_and_strips_reasoning(self, monkeypatch):
+        client = self._client()
+        sent = {}
+
+        def post(path, body, **kw):
+            sent.update(path=path, body=body)
+            return {
+                "choices": [{"message": {"content": '<think>hmm</think>\n```json\n{"a": 1}\n```'}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+            }
+
+        monkeypatch.setattr(client, "_post", post)
+        fmt = {"type": "json_schema", "json_schema": {"name": "x", "schema": {"type": "object"}}}
+        with collect_usage() as usage:
+            assert client.chat_completion(MESSAGES, response_format=fmt) == '{"a": 1}'
+
+        assert sent["path"] == "/chat/completions"
+        assert sent["body"]["response_format"] == fmt
+        [call] = usage.calls
+        assert (call.provider, call.input_tokens, call.output_tokens) == ("nvidia", 12, 3)
+        assert call.cost_usd == 0.0
+
+    def test_embeddings_use_the_task_as_input_type_and_batch(self, monkeypatch):
+        client = self._client()
+        bodies = []
+
+        def post(path, body, **kw):
+            bodies.append(body)
+            # Out of order on purpose: rows are matched back by index.
+            n = len(body["input"])
+            return {"data": [{"index": i, "embedding": [float(i)]} for i in reversed(range(n))]}
+
+        monkeypatch.setattr(client, "_post", post)
+        vectors = client.get_embeddings(["t"] * 40, task="document")
+
+        assert [len(b["input"]) for b in bodies] == [32, 8]
+        assert {b["input_type"] for b in bodies} == {"passage"}
+        assert {b["model"] for b in bodies} == {"e"}
+        assert vectors[:2] == [[0.0], [1.0]]
+
+        client.get_embeddings(["q"], task="query")
+        assert bodies[-1]["input_type"] == "query"
+
+    def test_a_caller_named_model_is_ignored(self, monkeypatch):
+        client = self._client()
+        bodies = []
+        monkeypatch.setattr(
+            client,
+            "_post",
+            lambda path, body, **kw: bodies.append(body) or {"data": [{"index": 0, "embedding": [1.0]}]},
+        )
+        client.get_embeddings(["x"], model="sentence-transformers/all-minilm-l12-v2")
+        assert bodies[0]["model"] == "e"
+
+    def test_rate_limits_are_retried(self, monkeypatch):
+        client = self._client()
+        attempts = []
+
+        def urlopen(request, timeout):
+            attempts.append(request)
+            if len(attempts) == 1:
+                raise core.HTTPError(request.full_url, 429, "Too Many Requests", {}, io.BytesIO(b"slow down"))
+            return _FakeHTTPResponse(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+
+        monkeypatch.setattr(core.urllib.request, "urlopen", urlopen)
+        monkeypatch.setattr(core.time, "sleep", lambda s: None)
+        assert client.chat_completion(MESSAGES, response_format=None) == "ok"
+        assert len(attempts) == 2
+
+
+def test_pacer_spaces_calls(monkeypatch):
+    clock = {"now": 100.0}
+    slept = []
+    monkeypatch.setattr(core.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(core.time, "sleep", lambda s: slept.append(s))
+
+    pacer = core._Pacer(rpm=30)  # one call every 2 seconds
+    pacer.wait()
+    pacer.wait()
+    pacer.wait()
+
+    assert slept == [2.0, 4.0]

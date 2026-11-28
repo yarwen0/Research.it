@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import urllib
 import urllib.error
@@ -17,6 +18,11 @@ from config import (
     GOOGLE_CLOUD_PROJECT,
     LLM_PROVIDER,
     NO_LLM_PROVIDER_MESSAGE,
+    NVIDIA_API_KEY,
+    NVIDIA_BASE_URL,
+    NVIDIA_EMBED_MODEL,
+    NVIDIA_MODEL,
+    NVIDIA_RPM,
     OLLAMA_BASE_URL,
     OLLAMA_EMBED_MODEL,
     OLLAMA_MODEL,
@@ -527,14 +533,177 @@ class OllamaClient:
         return vectors
 
 
+class _Pacer:
+    """Spaces calls at least `60 / rpm` seconds apart across every thread.
+
+    A research run extracts papers from a thread pool, so per-thread waits
+    would still burst past a per-minute cap together.
+    """
+
+    def __init__(self, rpm: int) -> None:
+        self.interval = 60.0 / max(rpm, 1)
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            start = max(now, self._next)
+            self._next = start + self.interval
+        if start > now:
+            time.sleep(start - now)
+
+
+_NVIDIA_INPUT_TYPES = {"document": "passage", "query": "query"}
+
+
+def _strip_code_fence(content: str) -> str:
+    """Drop the markdown fence some models wrap JSON in."""
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped[3:]
+        if stripped.endswith("```"):
+            stripped = stripped[:-3]
+        stripped = stripped.strip()
+    return stripped
+
+
+class NvidiaClient:
+    """NVIDIA's hosted models (build.nvidia.com), over their OpenAI-style API.
+
+    Same surface as the other clients. The free key has no daily quota, only
+    a per-minute cap shared by every model, so this client paces its own
+    calls to `rpm` and backs off on a 429 rather than relying on luck.
+    """
+
+    provider = "nvidia"
+    EMBED_BATCH = 32
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        embed_model: str,
+        base_url: str = "https://integrate.api.nvidia.com/v1",
+        rpm: int = 35,
+        timeout: int = 120,
+    ) -> None:
+        self.api_key = api_key
+        self.model = model
+        self.embed_model = embed_model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self._pacer = _nvidia_pacer(rpm)
+
+    @property
+    def embedding_model_id(self) -> str:
+        return self.embed_model
+
+    def _post(self, path: str, body: dict, *, max_retries: int = 4) -> dict:
+        payload = json.dumps(body).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        attempt = 0
+        while True:
+            self._pacer.wait()
+            request = urllib.request.Request(f"{self.base_url}{path}", data=payload, headers=headers)
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:  # nosec B310
+                    return json.loads(response.read().decode("utf-8"))
+            except HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+                if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                    attempt += 1
+                    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                    delay = min(30, int(retry_after) if (retry_after or "").isdigit() else 2 ** (attempt + 1))
+                    logger.warning(
+                        f"NVIDIA HTTP {exc.code} on attempt {attempt}/{max_retries}, "
+                        f"sleeping {delay}s before retry"
+                    )
+                    time.sleep(delay)
+                    continue
+                raise RuntimeError(f"NVIDIA HTTP {exc.code}: {detail or exc.reason}") from exc
+
+    def chat_completion(self, messages: list[dict[str, str]], *, response_format: dict | None) -> str:
+        body: dict = {"model": self.model, "messages": messages, "temperature": 0.2}
+        if response_format:
+            body["response_format"] = response_format
+        with track_llm_call(
+            self.provider, self.model, "chat", prompt_chars=_prompt_chars(messages)
+        ) as call:
+            parsed = self._post("/chat/completions", body)
+            _record_openai_usage(call, parsed)
+            try:
+                content = parsed["choices"][0]["message"].get("content") or ""
+            except (KeyError, IndexError) as exc:
+                raise ValueError(f"Unexpected NVIDIA response: {parsed}") from exc
+            # Reasoning models may think aloud before the answer.
+            content = _strip_code_fence(_strip_reasoning(content))
+            call.response_chars = len(content)
+            if not content:
+                raise ValueError(f"Empty content in NVIDIA response: {parsed}")
+        return content
+
+    def get_embeddings(
+        self, texts: list[str], model: str | None = None, *, task: str | None = None
+    ) -> list[list[float]]:
+        """Embed texts with the configured NVIDIA embedding model.
+
+        Like Ollama, the `model` callers pass names an OpenRouter model and is
+        ignored. NVIDIA's retrieval embedders are asymmetric and require an
+        input type; with no task given, texts are embedded as passages.
+        """
+        _check_task(task)
+        input_type = _NVIDIA_INPUT_TYPES.get(task or "document", "passage")
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), self.EMBED_BATCH):
+            batch = texts[start : start + self.EMBED_BATCH]
+            with track_llm_call(
+                self.provider,
+                self.embed_model,
+                "embeddings",
+                prompt_chars=sum(len(t) for t in batch),
+            ) as call:
+                parsed = self._post(
+                    "/embeddings",
+                    {
+                        "model": self.embed_model,
+                        "input": batch,
+                        "input_type": input_type,
+                        "encoding_format": "float",
+                        # Cut an over-long passage rather than fail its batch.
+                        "truncate": "END",
+                    },
+                )
+                _record_openai_usage(call, parsed)
+            rows = sorted(parsed.get("data", []), key=lambda row: row.get("index", 0))
+            vectors.extend(row["embedding"] for row in rows)
+        return vectors
+
+
+# One pacer per process: the cap is per account, not per client instance.
+_NVIDIA_PACERS: dict[int, _Pacer] = {}
+_NVIDIA_PACERS_LOCK = threading.Lock()
+
+
+def _nvidia_pacer(rpm: int) -> _Pacer:
+    with _NVIDIA_PACERS_LOCK:
+        return _NVIDIA_PACERS.setdefault(rpm, _Pacer(rpm))
+
+
 def create_llm_client(*, model: str | None = None, timeout: int = 120):
     """
     Factory that returns the configured LLM client.
 
     Selection order:
-      1. LLM_PROVIDER env (gemini | openrouter | ollama | vertex) — explicit override
+      1. LLM_PROVIDER env (gemini | openrouter | ollama | vertex | nvidia) — explicit override
       2. GEMINI_API_KEY present → Gemini
-      3. OPENROUTER_API_KEY present → OpenRouter
+      3. NVIDIA_API_KEY present → NVIDIA
+      4. OPENROUTER_API_KEY present → OpenRouter
     """
     # Validated here rather than at import, so work that needs no LLM — running
     # migrations, most obviously — does not require a key to be configured.
@@ -544,7 +713,22 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
     provider = (LLM_PROVIDER or "").strip().lower()
 
     if not provider:
-        provider = "gemini" if GEMINI_API_KEY else "openrouter"
+        provider = "gemini" if GEMINI_API_KEY else "nvidia" if NVIDIA_API_KEY else "openrouter"
+
+    if provider == "nvidia":
+        if not NVIDIA_API_KEY:
+            raise RuntimeError(
+                "LLM_PROVIDER=nvidia but NVIDIA_API_KEY is not set. "
+                "Get a free key at https://build.nvidia.com and add it to your .env."
+            )
+        return NvidiaClient(
+            api_key=NVIDIA_API_KEY,
+            model=model or NVIDIA_MODEL,
+            embed_model=NVIDIA_EMBED_MODEL,
+            base_url=NVIDIA_BASE_URL,
+            rpm=NVIDIA_RPM,
+            timeout=timeout,
+        )
 
     if provider == "vertex":
         # Imported here: vertex_ai subclasses GeminiClient from this module.
