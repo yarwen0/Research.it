@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { APIError, compileLatex, errorFromResponse, fetchGraph } from "./api";
+import { APIError, compileLatex, errorFromResponse, fetchGraph, wakeApi } from "./api";
 
 describe("APIError", () => {
   it("sets name and statusCode", () => {
@@ -152,5 +152,28 @@ describe("an unreachable API", () => {
       name: "APIError",
       message: expect.stringMatching(/^Could not reach the API at http.* \(Failed to fetch\)\. .*starting up/),
     });
+  });
+});
+
+describe("wakeApi", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("pings the health endpoint", () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    wakeApi();
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/health$/));
+  });
+
+  it("swallows a failure, leaving the real request to report it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    expect(() => wakeApi()).not.toThrow();
+    // Let the rejection settle; an unhandled one would fail the run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

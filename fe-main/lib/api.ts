@@ -201,6 +201,18 @@ export async function submitResearchAndCollect(
 }
 
 /**
+ * Nudge the API awake without waiting on it.
+ *
+ * A free host sleeps an idle API and takes about a minute to boot it again.
+ * Called when a page loads, the boot overlaps the visitor typing a topic
+ * instead of following it. Failures are ignored: the real request reports
+ * its own.
+ */
+export function wakeApi(): void {
+  fetch(`${API_BASE_URL}/health`).catch(() => {});
+}
+
+/**
  * Fetch the citation graph for a completed research session
  */
 export async function fetchGraph(projectId: string): Promise<GraphData> {
