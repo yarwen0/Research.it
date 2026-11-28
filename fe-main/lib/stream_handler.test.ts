@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, type Mock } from "vitest";
-import { StreamHandler, StreamHandlerCallbacks } from "./stream_handler";
+import { StatusType, StreamHandler, StreamHandlerCallbacks, isFatal } from "./stream_handler";
 
 /** Build a Response whose body streams the given string chunks as SSE bytes. */
 function sseResponse(chunks: string[]): Response {
@@ -102,5 +102,27 @@ describe("StreamHandler.processStream", () => {
     await expect(
       new StreamHandler(cb).processStream(new Response(null, { status: 200 })),
     ).rejects.toThrow("Response body is null");
+  });
+});
+
+describe("isFatal", () => {
+  const event = (message: string, result?: Record<string, unknown>) => ({
+    status: StatusType.ERROR,
+    message,
+    result,
+  });
+
+  it("ends the run on an error the backend marks fatal", () => {
+    expect(isFatal(event("arXiv is rate-limiting", { fatal: true }))).toBe(true);
+    expect(isFatal(event("Pipeline error: boom"))).toBe(true);
+  });
+
+  it("lets the run continue past errors it survives", () => {
+    expect(isFatal(event("Error processing paper X: bad PDF"))).toBe(false);
+    expect(isFatal(event("arXiv throttled. Skipped the last 2 of 5 topics", { fatal: false }))).toBe(false);
+  });
+
+  it("treats an error with no event, like a dropped stream, as fatal", () => {
+    expect(isFatal(undefined)).toBe(true);
   });
 });

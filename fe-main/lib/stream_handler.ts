@@ -19,6 +19,20 @@ export interface SSEUpdate {
 }
 
 /**
+ * Whether an error event ends the run.
+ *
+ * A run reports some errors and carries on: one unreadable paper, or arXiv
+ * throttling after papers were already read. The backend marks the ones that
+ * end it with `fatal`, or as a "Pipeline error", the same rule its job runner
+ * uses to fail the job. An error with no event behind it, such as a dropped
+ * connection, always ends the stream.
+ */
+export function isFatal(update?: SSEUpdate): boolean {
+  if (!update) return true;
+  return Boolean(update.result?.fatal) || update.message.startsWith("Pipeline error");
+}
+
+/**
  * Callbacks for different SSE events
  */
 export interface StreamHandlerCallbacks {
