@@ -161,7 +161,7 @@ export async function submitResearch(
     const handler = new StreamHandler(callbacks);
     
     // Start processing in background (don't await)
-    handler.processStream(response).catch((error) => {
+    keepApiAwakeDuring(handler.processStream(response)).catch((error) => {
       callbacks?.onError?.(error.message);
     });
 
@@ -213,6 +213,24 @@ export function wakeApi(): void {
 }
 
 /**
+ * How often to ping the API while a long stream is open. Render's free plan
+ * stops an instance 15 minutes after its last incoming request, and an open
+ * stream does not count: a 50-paper run was killed mid-way at exactly 15
+ * minutes. Pinging well inside that keeps the run's instance up.
+ */
+export const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
+
+/** Ping the API on an interval until `work` settles, then stop. */
+export async function keepApiAwakeDuring<T>(work: Promise<T>): Promise<T> {
+  const timer = setInterval(wakeApi, KEEPALIVE_INTERVAL_MS);
+  try {
+    return await work;
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+/**
  * Fetch the citation graph for a completed research session
  */
 export async function fetchGraph(projectId: string): Promise<GraphData> {
@@ -256,7 +274,7 @@ export async function resumeResearch(
   }
 
   const handler = new StreamHandler(callbacks);
-  handler.processStream(response).catch((error) => {
+  keepApiAwakeDuring(handler.processStream(response)).catch((error) => {
     callbacks?.onError?.(error.message);
   });
   return handler;
@@ -295,7 +313,7 @@ export async function submitCreateReview(
   // Outside the try: a stream that drops part-way did reach the API, and the
   // handler has already reported it through onError.
   const streamHandler = new StreamHandler(callbacks);
-  await streamHandler.processStream(response);
+  await keepApiAwakeDuring(streamHandler.processStream(response));
   return streamHandler;
 }
 

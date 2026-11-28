@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { APIError, compileLatex, errorFromResponse, fetchGraph, wakeApi } from "./api";
+import {
+  APIError,
+  KEEPALIVE_INTERVAL_MS,
+  compileLatex,
+  errorFromResponse,
+  fetchGraph,
+  keepApiAwakeDuring,
+  wakeApi,
+} from "./api";
 
 describe("APIError", () => {
   it("sets name and statusCode", () => {
@@ -175,5 +183,41 @@ describe("wakeApi", () => {
     expect(() => wakeApi()).not.toThrow();
     // Let the rejection settle; an unhandled one would fail the run.
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+});
+
+describe("keepApiAwakeDuring", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("pings inside Render's 15-minute idle window until the work settles", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(KEEPALIVE_INTERVAL_MS).toBeLessThan(15 * 60 * 1000);
+
+    let finish!: (value: string) => void;
+    const work = keepApiAwakeDuring(new Promise<string>((resolve) => (finish = resolve)));
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    finish("done");
+    await expect(work).resolves.toBe("done");
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("stops pinging when the work fails", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(keepApiAwakeDuring(Promise.reject(new Error("dropped")))).rejects.toThrow("dropped");
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
