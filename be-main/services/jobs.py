@@ -191,6 +191,29 @@ async def run_job(job_id: str, pipeline: JobPipeline) -> None:
     logger.info("Job %s finished after %s events", job_id, sequence)
 
 
+def fail_interrupted_jobs() -> int:
+    """Mark jobs a previous process left unfinished as failed.
+
+    Jobs run in-process, so one still pending or running when the process
+    starts belonged to a process that is gone: killed, out of memory, or put
+    to sleep by a free host. Left as is, a client resuming it would wait out
+    the idle timeout for events that will never come. Only sound while one
+    process serves the API, which is how every deployment here runs it.
+
+    Returns how many jobs were marked.
+    """
+    with session_scope() as session:
+        stale = session.scalars(
+            select(Job).where(Job.status.in_((JobStatus.PENDING, JobStatus.RUNNING)))
+        ).all()
+        for job in stale:
+            job.status = JobStatus.FAILED
+            job.error = "Interrupted: the server restarted before the job finished"
+    if stale:
+        logger.warning("Marked %s interrupted job(s) as failed", len(stale))
+    return len(stale)
+
+
 def start_job(user_prompt: str, params: dict[str, Any], pipeline: JobPipeline) -> str:
     """Create a job and kick it off in the background."""
     job_id = create_job(user_prompt, params)

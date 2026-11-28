@@ -26,6 +26,7 @@ from services.events import (
 from services.jobs import (
     JobNotFoundError,
     create_job,
+    fail_interrupted_jobs,
     get_job,
     run_job,
     tail_events,
@@ -206,6 +207,32 @@ class TestResumption:
             _collect(tail_events(job_id)), timeout=5
         )
         assert seen == []
+
+
+class TestInterruptedJobs:
+    def test_unfinished_jobs_from_a_previous_process_are_failed(self):
+        pending = create_job("prompt", {})
+        running = create_job("prompt", {})
+        with session_scope() as session:
+            session.get(Job, running).status = JobStatus.RUNNING
+
+        assert fail_interrupted_jobs() >= 2
+
+        for job_id in (pending, running):
+            job = get_job(job_id)
+            assert job["status"] == JobStatus.FAILED.value
+            assert "restarted" in job["error"]
+
+    def test_finished_jobs_are_left_alone(self):
+        job_id = create_job("prompt", {})
+        with session_scope() as session:
+            session.get(Job, job_id).status = JobStatus.COMPLETED
+
+        fail_interrupted_jobs()
+
+        job = get_job(job_id)
+        assert job["status"] == JobStatus.COMPLETED.value
+        assert job["error"] is None
 
 
 async def _collect(agen):
