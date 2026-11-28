@@ -62,7 +62,7 @@ transaction-mode pooler. The API enables the `vector` extension itself.
 
 | Variable         | Value                                              |
 |------------------|----------------------------------------------------|
-| `GEMINI_API_KEY` | A key from <https://aistudio.google.com/apikey>    |
+| `NVIDIA_API_KEY` | A free key from <https://build.nvidia.com> (no card) |
 | `DATABASE_URL`   | Neon's pooled connection string (`-pooler` in the host) |
 | `DATABASE_URL_UNPOOLED` | Neon's direct connection string             |
 | `CORS_ORIGINS`   | The Vercel production URL, e.g. `https://researchit.vercel.app` |
@@ -93,9 +93,14 @@ vercel --prod
   parsing gets a tenth of a core.
 - **No persistent disk.** Runs, papers, graphs and passages live in Neon and
   survive; downloaded PDFs and compiled reviews under `/app/data` do not.
-- **Gemini's free tier rate-limits.** Heavy use returns 429s. The API's own
-  limits (5 runs an hour per visitor, at most 10 topics × 10 papers each)
-  keep one visitor from spending the whole quota.
+- **The LLM is NVIDIA's free key.** It has no daily quota, only a cap of
+  about 40 requests a minute shared by every model, which the client paces
+  itself under. Gemini's free tier was tried first and could not finish a
+  small run: a few runs a day exhaust it, and its embedding limit refused
+  most papers' passages. NVIDIA describes its free key as a trial for
+  prototyping. The API's own limits (5 runs an hour per visitor, at most
+  10 topics × 10 papers each) keep one visitor from taking every minute's
+  budget.
 
 ## 4. Hosted (Fly.io + Vercel)
 
