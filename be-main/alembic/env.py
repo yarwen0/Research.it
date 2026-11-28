@@ -18,13 +18,15 @@ from alembic import context
 # Make the backend package importable when alembic runs from be-main/.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import DATABASE_URL
+from config import MIGRATION_DATABASE_URL
 from db.models import Base
 
 config = context.config
 
 # ConfigParser treats % as interpolation, and passwords in URLs contain them.
-config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+# The direct connection when one is configured: DDL does not belong on a
+# transaction-mode pooler.
+config.set_main_option("sqlalchemy.url", MIGRATION_DATABASE_URL.replace("%", "%%"))
 
 # Only when alembic is driving. Running migrations in-process at app startup
 # would otherwise have fileConfig tear down the handlers the app just
@@ -38,13 +40,13 @@ target_metadata = Base.metadata
 
 
 def _is_sqlite() -> bool:
-    return DATABASE_URL.startswith("sqlite")
+    return MIGRATION_DATABASE_URL.startswith("sqlite")
 
 
 def run_migrations_offline() -> None:
     """Emit SQL to stdout without connecting."""
     context.configure(
-        url=DATABASE_URL,
+        url=MIGRATION_DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},

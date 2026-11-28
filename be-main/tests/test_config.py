@@ -116,3 +116,35 @@ class TestDatabaseUrlNormalization:
             config._normalize_database_url(url)
             == "postgresql+psycopg://user:postgres://pw@host/db"
         )
+
+
+class TestMigrationDatabaseUrl:
+    """Neon's DATABASE_URL is its pooler; migrations take the direct URL."""
+
+    def _reload_with(self, monkeypatch, **env):
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        return importlib.reload(config)
+
+    def test_uses_the_unpooled_url_when_given(self, monkeypatch):
+        try:
+            reloaded = self._reload_with(
+                monkeypatch,
+                DATABASE_URL="postgresql://u:pw@ep-x-pooler.neon.tech/db",
+                DATABASE_URL_UNPOOLED="postgresql://u:pw@ep-x.neon.tech/db",
+            )
+            assert reloaded.DATABASE_URL == "postgresql+psycopg://u:pw@ep-x-pooler.neon.tech/db"
+            assert reloaded.MIGRATION_DATABASE_URL == "postgresql+psycopg://u:pw@ep-x.neon.tech/db"
+        finally:
+            monkeypatch.delenv("DATABASE_URL", raising=False)
+            monkeypatch.delenv("DATABASE_URL_UNPOOLED", raising=False)
+            importlib.reload(config)
+
+    def test_falls_back_to_database_url(self, monkeypatch):
+        try:
+            monkeypatch.delenv("DATABASE_URL_UNPOOLED", raising=False)
+            reloaded = self._reload_with(monkeypatch, DATABASE_URL="postgresql://u:pw@host/db")
+            assert reloaded.MIGRATION_DATABASE_URL == reloaded.DATABASE_URL
+        finally:
+            monkeypatch.delenv("DATABASE_URL", raising=False)
+            importlib.reload(config)

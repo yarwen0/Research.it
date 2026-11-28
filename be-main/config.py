@@ -118,6 +118,14 @@ DATABASE_URL = _normalize_database_url(
     _maybe("DATABASE_URL") or f"sqlite:///{_BASE_DIR / 'data' / 'researchit.db'}"
 )
 
+# Migrations need a plain session. Behind a transaction-mode pooler such as
+# Neon's, DATABASE_URL is the pooled endpoint, which suits the app's queries
+# but not DDL; Neon hands out the direct one as DATABASE_URL_UNPOOLED. Without
+# it, migrations share DATABASE_URL, as they always have.
+MIGRATION_DATABASE_URL = (
+    _normalize_database_url(_maybe("DATABASE_URL_UNPOOLED") or "") or DATABASE_URL
+)
+
 # Pool sizing only applies to Postgres — SQLite ignores it.
 DB_POOL_SIZE = _int("DB_POOL_SIZE", 5)
 DB_MAX_OVERFLOW = _int("DB_MAX_OVERFLOW", 10)

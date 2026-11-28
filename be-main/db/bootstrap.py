@@ -14,7 +14,7 @@ from pathlib import Path
 from alembic.config import Config
 
 from alembic import command
-from config import AUTO_MIGRATE, DATABASE_URL
+from config import AUTO_MIGRATE, MIGRATION_DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def _alembic_config() -> Config:
     config = Config(str(_ALEMBIC_INI))
     config.set_main_option("script_location", str(_ALEMBIC_INI.parent / "alembic"))
     # ConfigParser reads % as interpolation; passwords in URLs contain them.
-    config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+    config.set_main_option("sqlalchemy.url", MIGRATION_DATABASE_URL.replace("%", "%%"))
     # The app configures logging before this runs; letting alembic apply
     # alembic.ini's logging config would replace those handlers and silently
     # revert every subsequent line to the default format.
