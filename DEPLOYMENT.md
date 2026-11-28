@@ -1,6 +1,6 @@
 # Deployment
 
-Four ways to run Research.it, in increasing order of effort.
+Five ways to run Research.it, in increasing order of effort.
 
 ## 1. Docker Compose (recommended for trying it out)
 
@@ -31,7 +31,61 @@ Postgres needs that extension available and a role allowed to create it.
 See the [root README](README.md#quickstart). You need Python 3.10+, Node 20.9+
 with pnpm, and optionally a LaTeX toolchain.
 
-## 3. Hosted (Fly.io + Vercel)
+## 3. Free hosting (Render + Neon + Vercel)
+
+Costs nothing and needs no card. The API runs on Render's free plan, the
+database on Neon's free Postgres (which has pgvector), and the frontend on
+Vercel Hobby.
+
+### Database → Neon
+
+Create a project at <https://neon.tech>, in **AWS US West 2 (Oregon)** to sit
+next to the API, and copy its **direct** connection string (not the pooled
+one: migrations run on startup and want a plain session). The API enables
+the `vector` extension itself.
+
+### Backend → Render
+
+[`render.yaml`](render.yaml) is a Blueprint. In the Render dashboard choose
+**New → Blueprint**, pick the repository, and fill in what it asks for:
+
+| Variable         | Value                                              |
+|------------------|----------------------------------------------------|
+| `GEMINI_API_KEY` | A key from <https://aistudio.google.com/apikey>    |
+| `DATABASE_URL`   | Neon's direct connection string                     |
+| `CORS_ORIGINS`   | The Vercel production URL, e.g. `https://researchit.vercel.app` |
+
+It deploys `be-main/Dockerfile`, and from then on redeploys each push to
+`main` that touches `be-main/`, once CI has passed on it.
+
+### Frontend → Vercel
+
+```bash
+cd fe-main
+vercel link                 # once; the project root is fe-main
+vercel env add NEXT_PUBLIC_API_URL production   # https://researchit-api.onrender.com
+vercel --prod
+```
+
+### What free costs you
+
+- **The API sleeps after 15 minutes without a request** and takes about a
+  minute to wake. The home page pings it on load so it boots while you type,
+  and the frontend says so if a request still lands on a cold instance.
+- **A run in progress dies if the API is put to sleep or restarted.** Keep
+  the tab open while it runs; an open stream should keep the instance awake,
+  though Render does not document that. A job a dead instance left behind is
+  marked failed the next time the API starts.
+- **0.1 CPU and 512 MB of RAM.** A 2-topic, 2-paper run peaked at about
+  180 MB, so the "fast" and "medium" presets fit; runs are slow because PDF
+  parsing gets a tenth of a core.
+- **No persistent disk.** Runs, papers, graphs and passages live in Neon and
+  survive; downloaded PDFs and compiled reviews under `/app/data` do not.
+- **Gemini's free tier rate-limits.** Heavy use returns 429s. The API's own
+  limits (5 runs an hour per visitor, at most 10 topics × 10 papers each)
+  keep one visitor from spending the whole quota.
+
+## 4. Hosted (Fly.io + Vercel)
 
 The split is deliberate: the backend is a long-lived streaming service with
 disk state, the frontend is static-ish and benefits from a CDN.
@@ -87,7 +141,7 @@ back to the project's production domain.
 Point `CORS_ORIGINS` on the backend at the real frontend origin. Leaving it at
 the `*` default means any site can call your API.
 
-## 4. Google Cloud (Cloud Run, Cloud SQL, Vertex AI)
+## 5. Google Cloud (Cloud Run, Cloud SQL, Vertex AI)
 
 Everything is in [`deploy/gcp/`](deploy/gcp): Terraform for the
 infrastructure and a Cloud Build pipeline for the images. CI formats and
@@ -186,6 +240,9 @@ The project needs the Vertex AI API enabled and your account
 | `VERTEX_MODEL`             | backend   | `gemini-2.5-flash-lite`  | Gemini model on Vertex AI                  |
 | `VERTEX_EMBED_MODEL`       | backend   | `text-embedding-005`     | Embedding model on Vertex AI               |
 | `TRUSTED_PROXY_HOPS`       | backend   | `0`                      | Proxies that append to `X-Forwarded-For`   |
+| `CLIENT_IP_HEADER`         | backend   | —                        | Edge-set client IP header, e.g. `true-client-ip` on Render |
+| `RESEARCH_MAX_TOPICS`      | backend   | `10`                     | Most topics one run may ask for            |
+| `RESEARCH_MAX_PAPERS_PER_TOPIC` | backend | `10`                  | Most papers per topic one run may ask for  |
 | `MCP_API_KEY`              | backend   | —                        | Serve MCP at `/mcp/` behind this token     |
 | `CORS_ORIGINS`             | backend   | `*`                      | Comma-separated allowed browser origins    |
 | `HOST` / `PORT`            | backend   | `0.0.0.0` / `8000`       | Bind address                               |
