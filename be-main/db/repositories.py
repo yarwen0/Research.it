@@ -84,27 +84,59 @@ class GraphRepository:
         self.session = session
         self.project_id = project_id
         # Per-run caches so a bibliography of a few hundred references does not
-        # become a few hundred SELECTs.
+        # become a few hundred SELECTs. Filled from the database on first
+        # write, then kept current by every insert this repository makes; a
+        # 50-paper run is thousands of authors and edges, and against a
+        # database one network hop away a query apiece took most of an hour.
         self._author_cache: dict[str, Author] = {}
         self._reference_cache: dict[str, Paper] = {}
+        self._paper_authors: set[tuple[int, int]] = set()
+        self._citations: set[tuple[int, int]] = set()
+        self._loaded = False
 
     # -- writes ------------------------------------------------------------
 
+    def _load_existing(self) -> None:
+        """Read what the project already holds, once, in four queries."""
+        if self._loaded:
+            return
+        self._loaded = True
+        for author in self.session.scalars(
+            select(Author).where(Author.project_id == self.project_id)
+        ):
+            self._author_cache[author.slug] = author
+        for paper in self.session.scalars(
+            select(Paper).where(
+                Paper.project_id == self.project_id,
+                Paper.external_id.like("ref\\_%", escape="\\"),
+            )
+        ):
+            self._reference_cache[paper.external_id] = paper
+        self._paper_authors.update(
+            self.session.execute(
+                select(PaperAuthor.paper_id, PaperAuthor.author_id)
+                .join(Author, Author.id == PaperAuthor.author_id)
+                .where(Author.project_id == self.project_id)
+            ).tuples()
+        )
+        self._citations.update(
+            self.session.execute(
+                select(Citation.source_paper_id, Citation.target_paper_id).where(
+                    Citation.project_id == self.project_id
+                )
+            ).tuples()
+        )
+
     def _get_or_create_author(self, name: str) -> Author:
+        self._load_existing()
         slug = author_node_id(name)
         cached = self._author_cache.get(slug)
         if cached is not None:
             return cached
 
-        author = self.session.scalar(
-            select(Author).where(
-                Author.project_id == self.project_id, Author.slug == slug
-            )
-        )
-        if author is None:
-            author = Author(project_id=self.project_id, slug=slug, name=name)
-            self.session.add(author)
-            self.session.flush()
+        author = Author(project_id=self.project_id, slug=slug, name=name)
+        self.session.add(author)
+        self.session.flush()
 
         self._author_cache[slug] = author
         return author
@@ -116,15 +148,9 @@ class GraphRepository:
             author = self._get_or_create_author(name)
             # Explicit join-row insert rather than list append, so the caller
             # is not forced to have the collection loaded.
-            exists = self.session.scalar(
-                select(func.count())
-                .select_from(PaperAuthor)
-                .where(
-                    PaperAuthor.paper_id == paper.id,
-                    PaperAuthor.author_id == author.id,
-                )
-            )
-            if not exists:
+            pair = (paper.id, author.id)
+            if pair not in self._paper_authors:
+                self._paper_authors.add(pair)
                 self.session.add(
                     PaperAuthor(paper_id=paper.id, author_id=author.id)
                 )
@@ -168,23 +194,16 @@ class GraphRepository:
         if len(title) <= MIN_REFERENCE_TITLE_LENGTH:
             return None
 
-        key = _normalize_title(title)
-        target = self._reference_cache.get(key)
-
-        if target is None:
-            target = self.session.scalar(
-                select(Paper).where(
-                    Paper.project_id == self.project_id,
-                    Paper.external_id == f"ref_{key[:200]}",
-                )
-            )
+        self._load_existing()
+        # Derived from the title so the same work reached from a different
+        # paper lands on the same row.
+        external_id = f"ref_{_normalize_title(title)[:200]}"
+        target = self._reference_cache.get(external_id)
 
         if target is None:
             target = Paper(
                 project_id=self.project_id,
-                # Derived from the title so the same work reached from a
-                # different paper lands on the same row.
-                external_id=f"ref_{key[:200]}",
+                external_id=external_id,
                 title=title,
                 published=reference.get("published"),
                 is_processed=False,
@@ -193,17 +212,11 @@ class GraphRepository:
             self.session.flush()
             self._attach_authors(target, reference.get("authors", []))
 
-        self._reference_cache[key] = target
+        self._reference_cache[external_id] = target
 
-        already_linked = self.session.scalar(
-            select(func.count())
-            .select_from(Citation)
-            .where(
-                Citation.source_paper_id == source.id,
-                Citation.target_paper_id == target.id,
-            )
-        )
-        if not already_linked:
+        edge = (source.id, target.id)
+        if edge not in self._citations:
+            self._citations.add(edge)
             self.session.add(
                 Citation(
                     project_id=self.project_id,

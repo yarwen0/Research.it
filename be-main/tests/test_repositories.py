@@ -135,6 +135,59 @@ class TestGraphWrites:
         assert session.scalar(select(func.count()).select_from(Citation)) == 1
 
 
+    def test_select_count_does_not_grow_with_the_run(self, session, graph):
+        # Against a database a network hop away, one SELECT per reference and
+        # per author made saving a 50-paper run take most of an hour.
+        from sqlalchemy import event
+
+        selects = []
+
+        def count(conn, cursor, statement, *args):
+            if statement.lstrip().upper().startswith("SELECT"):
+                selects.append(statement)
+
+        engine = session.get_bind()
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            graph.build_from_processed_papers(
+                [
+                    _paper(
+                        f"2301.{i:03d}",
+                        f"Paper {i}",
+                        authors=[f"Author {i}", "Shared Author"],
+                        references=[
+                            {"title": f"A referenced work number {j}", "authors": [f"Ref Author {j}"]}
+                            for j in range(20)
+                        ],
+                    )
+                    for i in range(5)
+                ]
+            )
+            session.flush()
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+
+        # One per processed paper (it may already exist) plus the four that
+        # load the project's existing graph, whatever the number of references.
+        assert len(selects) <= 5 + 4
+        assert session.scalar(select(func.count()).select_from(Citation)) == 100
+
+    def test_a_fresh_repository_skips_rows_already_written(self, session, project):
+        first = GraphRepository(session, project.id)
+        a = first.add_processed_paper(_paper("2301.001", "A", authors=["Jane Doe"]))
+        first.add_reference(a, {"title": "Attention Is All You Need", "authors": ["Ashish Vaswani"]})
+        session.flush()
+
+        second = GraphRepository(session, project.id)
+        a_again = second.add_processed_paper(_paper("2301.001", "A", authors=["Jane Doe"]))
+        second.add_reference(a_again, {"title": "Attention Is All You Need", "authors": ["Ashish Vaswani"]})
+        session.flush()
+
+        assert session.scalar(select(func.count()).select_from(Paper)) == 2
+        assert session.scalar(select(func.count()).select_from(Author)) == 2
+        assert session.scalar(select(func.count()).select_from(Citation)) == 1
+
+
 class TestGraphReads:
     def test_reports_empty_before_any_writes(self, graph):
         assert graph.is_empty() is True
