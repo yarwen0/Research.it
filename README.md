@@ -17,6 +17,10 @@ literature review in LaTeX — streaming its progress to a web UI the whole way.
 
 > Built at Hatchathon 2025.
 
+<p align="center">
+  <img src="docs/images/graph-and-gaps.png" alt="A run on hand pose estimation: the papers it read on the left, their citation graph in the middle with a suggested paper and the two gaps behind it highlighted, and the selected paper's extracted problem, methods and datasets on the right" width="100%" />
+</p>
+
 ---
 
 ## What it does
@@ -41,6 +45,20 @@ Given a research prompt (e.g. *"diffusion models for pose transfer"*) the pipeli
    and compiles it to PDF.
 
 Progress is streamed to the frontend over Server-Sent Events (SSE).
+
+```mermaid
+flowchart LR
+    UI["Next.js UI"] -- "POST /api/research" --> API["FastAPI"]
+    API -- "SSE progress" --> UI
+    API --> Job["Background job"]
+    Job --> Arxiv[("arXiv")]
+    Job --> LLM["LLM: Gemini, Vertex AI,<br/>OpenRouter or Ollama"]
+    Job --> Gaps["Gap finder"]
+    Job --> DB[("Postgres + pgvector")]
+    DB --> RAG["Hybrid retrieval"]
+    RAG --> Ask["Ask / multi-agent assistant"]
+    RAG --> MCP["MCP server"]
+```
 
 Once a run is indexed its papers can be questioned directly.
 `POST /api/projects/{project_id}/ask` answers from retrieved passages only,
@@ -80,7 +98,7 @@ Each subproject has its own README with details:
 | Agents    | LangGraph multi-agent assistant, ReAct tool use, hybrid RAG (BM25 + pgvector)       |
 | Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
-| Infra     | Docker, Compose, Google Cloud (Cloud Run, Cloud SQL, Terraform, Cloud Build), Fly.io, Vercel |
+| Infra     | Docker, Compose, Render, Neon, Vercel, Google Cloud (Cloud Run, Cloud SQL, Terraform, Cloud Build), Fly.io |
 
 ## Documentation
 
@@ -107,8 +125,9 @@ Frontend on <http://localhost:3000>, API docs on <http://localhost:8000/docs>.
 Don't want to sign up for a key? Set `LLM_PROVIDER=ollama` in `.env` and run
 `docker compose --profile local-llm up --build` to pull local models instead.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups: Google Cloud (Cloud Run,
-Cloud SQL, Vertex AI) with Terraform, or Fly.io + Vercel.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for hosted setups: a free one on Render,
+Neon and Vercel, Google Cloud (Cloud Run, Cloud SQL, Vertex AI) with
+Terraform, or Fly.io + Vercel.
 
 ### Native
 
@@ -140,7 +159,7 @@ The frontend talks to the backend at `NEXT_PUBLIC_API_URL` (default
 
 ## LLM providers
 
-The backend runs against one of three providers, selected with `LLM_PROVIDER`:
+The backend runs against one of four providers, selected with `LLM_PROVIDER`:
 
 | Provider     | Key needed        | Notes                                            |
 |--------------|-------------------|--------------------------------------------------|
