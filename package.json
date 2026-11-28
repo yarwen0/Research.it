@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "dependencies": {
+    "@neon/config": "^1.14.8",
+    "@neon/env": "^2.1.11"
+  }
+}

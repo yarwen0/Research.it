@@ -29,3 +29,4 @@ cached_review.pdf
 /fe-main/playwright-report/
 /fe-main/blob-report/
 /fe-main/.playwright/
+.neon
