@@ -35,7 +35,7 @@ def _int(key: str, default: int) -> int:
 
 GEMINI_API_KEY = _maybe("GEMINI_API_KEY")
 OPENROUTER_API_KEY = _maybe("OPENROUTER_API_KEY")
-LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama' | 'vertex'; auto-detected when unset
+LLM_PROVIDER = _maybe("LLM_PROVIDER")  # 'gemini' | 'openrouter' | 'ollama' | 'vertex' | 'nvidia'; auto-detected when unset
 
 # Vertex AI (Gemini on Google Cloud). Enable with LLM_PROVIDER=vertex. Auth is
 # Application Default Credentials, so there is no key: on Cloud Run the
@@ -54,6 +54,16 @@ OLLAMA_EMBED_MODEL = _maybe("OLLAMA_EMBED_MODEL") or "nomic-embed-text"
 # generation slows to a crawl once the window fills. Raising it costs memory,
 # so it stays configurable for smaller machines.
 OLLAMA_NUM_CTX = _int("OLLAMA_NUM_CTX", 8192)
+
+# NVIDIA's hosted models (build.nvidia.com). Enable with LLM_PROVIDER=nvidia.
+# The free key has no daily quota, only a per-minute cap (about 40 requests a
+# minute across every model), so calls are paced to NVIDIA_RPM to stay under
+# it. NVIDIA describes the free key as a trial for prototyping.
+NVIDIA_API_KEY = _maybe("NVIDIA_API_KEY")
+NVIDIA_BASE_URL = _maybe("NVIDIA_BASE_URL") or "https://integrate.api.nvidia.com/v1"
+NVIDIA_MODEL = _maybe("NVIDIA_MODEL") or "nvidia/nemotron-3.5-lightning-30b-a3b"
+NVIDIA_EMBED_MODEL = _maybe("NVIDIA_EMBED_MODEL") or "nvidia/llama-3.2-nv-embedqa-1b-v1"
+NVIDIA_RPM = _int("NVIDIA_RPM", 35)
 
 # When using Gemini chat, embeddings still default to Gemini. Set OPENROUTER_FOR_EMBEDDINGS=1
 # to route high-volume embeddings through OpenRouter instead (needs a paid / non-exhausted key).
@@ -197,8 +207,9 @@ CLIENT_IP_HEADER = (_maybe("CLIENT_IP_HEADER") or "").lower() or None
 NO_LLM_PROVIDER_MESSAGE = (
     "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
     "(no key needed), LLM_PROVIDER=vertex for Vertex AI with Google Cloud "
-    "credentials, or set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
-    "or OPENROUTER_API_KEY in your .env file."
+    "credentials, or set GEMINI_API_KEY (https://aistudio.google.com/apikey), "
+    "NVIDIA_API_KEY (https://build.nvidia.com) or OPENROUTER_API_KEY in your "
+    ".env file."
 )
 
 
@@ -214,7 +225,7 @@ def has_llm_provider() -> bool:
     # when the client is built.
     if (LLM_PROVIDER or "").strip().lower() in ("ollama", "vertex"):
         return True
-    return bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
+    return bool(GEMINI_API_KEY or NVIDIA_API_KEY or OPENROUTER_API_KEY)
 
 
 # Back-compat: keep OPENROUTER_API_KEY non-null so existing imports do not crash.
