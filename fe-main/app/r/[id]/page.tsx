@@ -9,7 +9,7 @@ import ResearchResults from "@/app/_components/research-results";
 import { Nav } from "@/app/_components/nav";
 import { HistorySidebar } from "@/app/_components/history-sidebar";
 import { submitResearch, fetchGraph } from "@/lib/api";
-import { SSEUpdate } from "@/lib/stream_handler";
+import { SSEUpdate, isFatal } from "@/lib/stream_handler";
 import { SidebarProvider, SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { getResponseById, saveResponse, type ResearchResponse } from "@/lib/response-store";
 import { ensureFrontendFormat, transformPapers } from "@/lib/paper-transform";
@@ -171,7 +171,8 @@ function ResearchDetailContent() {
           
           router.push(`/r/${savedResponse.id}`);
         },
-        onError: (error) => {
+        onError: (error, update) => {
+          if (!isFatal(update)) return;
           console.error("Error:", error);
           setIsLoading(false);
         },

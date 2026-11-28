@@ -8,7 +8,7 @@ import ResearchResults from "./_components/research-results";
 import { Nav } from "./_components/nav";
 import { HistorySidebar } from "./_components/history-sidebar";
 import { submitResearch, fetchGraph, wakeApi } from "@/lib/api";
-import { SSEUpdate } from "@/lib/stream_handler";
+import { SSEUpdate, isFatal } from "@/lib/stream_handler";
 import { saveResponse, type ResearchResponse } from "@/lib/response-store";
 import { ensureFrontendFormat, transformPapers } from "@/lib/paper-transform";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
@@ -162,7 +162,9 @@ export default function Home() {
           });
           setCurrentResponseId(savedResponse.id);
         },
-        onError: (message) => {
+        onError: (message, update) => {
+          // Errors the run survives stay in the progress list, not the banner.
+          if (!isFatal(update)) return;
           console.error("Error:", message);
           setError(message);
           setIsLoading(false);

@@ -110,7 +110,7 @@ test.describe("research streaming", () => {
   test("shows an error event rather than failing silently", async ({ page }) => {
     await stubResearchStream(page, [
       { status: "processing", message: "Initializing arXiv research pipeline..." },
-      { status: "error", message: "arXiv is rate limiting requests" },
+      { status: "error", message: "arXiv is rate limiting requests", result: { fatal: true } },
     ]);
 
     await page.goto("/");
@@ -121,6 +121,24 @@ test.describe("research streaming", () => {
     await expect(page.getByTestId("research-error")).toContainText(/rate limiting/i, {
       timeout: 30_000,
     });
+  });
+
+  test("keeps going past an error the run survives", async ({ page }) => {
+    // One unreadable paper used to raise the error banner and stop the
+    // spinner while the run carried on and completed behind it.
+    await stubResearchStream(page, [
+      { status: "processing", message: "Initializing arXiv research pipeline..." },
+      { status: "error", message: "Error processing paper X: unreadable PDF" },
+      { status: "completed", message: "Research pipeline completed.", result: COMPLETED_RESULT },
+    ]);
+
+    await page.goto("/");
+    const input = page.getByRole("textbox").first();
+    await input.fill("diffusion models");
+    await input.press("Enter");
+
+    await expect(page.getByText(/Research Complete/i).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("research-error")).toHaveCount(0);
   });
 
   test("reports a rejected request instead of just stopping", async ({ page }) => {
