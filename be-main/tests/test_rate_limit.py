@@ -89,6 +89,33 @@ class TestAppendingProxies:
         assert client_identifier(request) == "203.0.113.7"
 
 
+class TestClientIpHeader:
+    """An edge that overwrites a header of its own, like Render's True-Client-IP."""
+
+    @pytest.fixture(autouse=True)
+    def render_edge(self, monkeypatch):
+        monkeypatch.setattr(rate_limit, "CLIENT_IP_HEADER", "true-client-ip")
+        monkeypatch.setattr(rate_limit, "TRUSTED_PROXY_HOPS", 0)
+        monkeypatch.setattr(rate_limit, "TRUST_PROXY_HEADERS", False)
+
+    def test_uses_the_header_the_edge_set(self):
+        request = _request_with({"true-client-ip": "203.0.113.7"})
+        assert client_identifier(request) == "203.0.113.7"
+
+    def test_a_forged_forwarded_for_cannot_change_the_bucket(self, monkeypatch):
+        # Render keeps whatever X-Forwarded-For the client sent, so it must
+        # lose to the header the edge wrote even when hops are trusted too.
+        monkeypatch.setattr(rate_limit, "TRUSTED_PROXY_HOPS", 1)
+        request = _request_with(
+            {"true-client-ip": "203.0.113.7", "x-forwarded-for": "1.1.1.1"}
+        )
+        assert client_identifier(request) == "203.0.113.7"
+
+    def test_falls_back_to_the_peer_when_the_header_is_absent(self):
+        request = _request_with({}, client_host="10.0.0.1")
+        assert client_identifier(request) == "10.0.0.1"
+
+
 @pytest.fixture
 def throttled_app():
     """A minimal app with a 2/minute endpoint, isolated from the real routes."""

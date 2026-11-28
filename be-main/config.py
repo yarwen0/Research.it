@@ -173,6 +173,12 @@ TRUST_PROXY_HEADERS = _truthy(os.getenv("TRUST_PROXY_HEADERS"))
 # TRUST_PROXY_HEADERS; 0 leaves it off.
 TRUSTED_PROXY_HOPS = _int("TRUSTED_PROXY_HOPS", 0)
 
+# For hosts whose edge writes the caller's address into a header of its own
+# and overwrites any value the client sent: Render's Cloudflare front sets
+# True-Client-IP, while its X-Forwarded-For keeps whatever the client wrote.
+# Names that header; takes precedence over both settings above.
+CLIENT_IP_HEADER = (_maybe("CLIENT_IP_HEADER") or "").lower() or None
+
 NO_LLM_PROVIDER_MESSAGE = (
     "No LLM provider configured. Set LLM_PROVIDER=ollama for local models "
     "(no key needed), LLM_PROVIDER=vertex for Vertex AI with Google Cloud "

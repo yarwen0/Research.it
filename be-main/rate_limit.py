@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from config import (
+    CLIENT_IP_HEADER,
     RATE_LIMIT_DEFAULT,
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_STORAGE_URI,
@@ -38,7 +39,15 @@ def client_identifier(request: Request) -> str:
       own quota bucket.
     * TRUST_PROXY_HEADERS — a proxy that overwrites the header, leaving the
       original client left-most.
+
+    CLIENT_IP_HEADER names a header the edge overwrites on every request, such
+    as Render's True-Client-IP. When set and present it wins over both.
     """
+    if CLIENT_IP_HEADER:
+        client_ip = request.headers.get(CLIENT_IP_HEADER, "").strip()
+        if client_ip:
+            return client_ip
+
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded and TRUSTED_PROXY_HOPS:
         hops = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
