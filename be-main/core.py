@@ -138,11 +138,14 @@ class GeminiClient:
     provider = "gemini"
     display_name = "Gemini"
 
-    # Order matters: cheapest/highest-quota first.
+    # Order matters: cheapest/highest-quota first. Free-tier quotas are per
+    # model, so every extra lite model is another day's budget. The 2.0 models
+    # were retired in 2026 and now answer 404.
     DEFAULT_FALLBACK_CHAIN: ClassVar[list[str]] = [
         "gemini-2.5-flash-lite",
-        "gemini-2.0-flash-lite",
-        "gemini-2.0-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
         "gemini-2.5-flash",
         "gemini-flash-latest",
     ]
@@ -252,6 +255,15 @@ class GeminiClient:
                 if "429" in msg and ("PerDay" in msg or "RPD" in msg or "free_tier_requests" in msg):
                     logger.warning(
                         f"Gemini model {model} exhausted daily quota; "
+                        f"falling back to next model in chain."
+                    )
+                    last_err = exc
+                    continue
+                # Google retires models on a schedule; a configured one that
+                # has gone should cost one round trip, not the whole run.
+                if "HTTP 404" in msg and model != self.model_chain[-1]:
+                    logger.warning(
+                        f"Gemini model {model} is not available; "
                         f"falling back to next model in chain."
                     )
                     last_err = exc

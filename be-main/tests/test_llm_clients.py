@@ -137,6 +137,35 @@ class TestGemini:
             ("gemini-2.5-flash", "ok"),
         ]
 
+    def test_a_retired_model_falls_through_to_the_next(self, monkeypatch):
+        client = GeminiClient(
+            api_key="k", model="gemini-2.0-flash-lite", fallback_models=["gemini-3.1-flash-lite"]
+        )
+
+        def post(url, body, **kw):
+            if "gemini-2.0-flash-lite" in url:
+                raise RuntimeError(
+                    "Gemini HTTP 404: This model models/gemini-2.0-flash-lite is no longer available."
+                )
+            return self._response(promptTokenCount=50, candidatesTokenCount=5)
+
+        monkeypatch.setattr(client, "_post", post)
+        assert client.chat_completion(MESSAGES, response_format=None) == "ok"
+
+    def test_a_404_on_the_last_model_is_raised(self, monkeypatch):
+        client = GeminiClient(api_key="k", model="gemini-gone", fallback_models=[])
+
+        def post(url, body, **kw):
+            raise RuntimeError("Gemini HTTP 404: model not found")
+
+        monkeypatch.setattr(client, "_post", post)
+        with pytest.raises(RuntimeError, match="404"):
+            client.chat_completion(MESSAGES, response_format=None)
+
+    def test_the_default_chain_has_no_retired_models(self):
+        chain = GeminiClient(api_key="k").model_chain
+        assert not [m for m in chain if m.startswith("gemini-2.0")]
+
     def test_embeddings_are_estimated_because_none_are_reported(self, monkeypatch):
         monkeypatch.setattr(core, "OPENROUTER_FOR_EMBEDDINGS", False)
         client = GeminiClient(api_key="k")
