@@ -17,6 +17,9 @@ literature review in LaTeX — streaming its progress to a web UI the whole way.
 
 > Built at Hatchathon 2025.
 
+**[Try it live →](https://researchit-liart.vercel.app)** Hosted for free, so the
+API sleeps when idle: the first request can take about a minute while it wakes.
+
 <p align="center">
   <img src="docs/images/graph-and-gaps.png" alt="A run on hand pose estimation: the papers it read on the left, their citation graph in the middle with a suggested paper and the two gaps behind it highlighted, and the selected paper's extracted problem, methods and datasets on the right" width="100%" />
 </p>
@@ -94,7 +97,7 @@ Each subproject has its own README with details:
 | Backend   | Python 3.10+, FastAPI, Uvicorn, Pydantic, arXiv, PyMuPDF, scikit-learn, PyLaTeX     |
 | Data      | Postgres + pgvector / SQLite, SQLAlchemy 2, Alembic                                 |
 | Frontend  | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui, MUI X Charts, Cytoscape  |
-| AI        | Gemini · Vertex AI · OpenRouter · Ollama (local) — chat + embeddings                |
+| AI        | Gemini · Vertex AI · NVIDIA · OpenRouter · Ollama (local) — chat + embeddings       |
 | Agents    | LangGraph multi-agent assistant, ReAct tool use, hybrid RAG (BM25 + pgvector)       |
 | Observability | structlog (JSON logs), correlation ids, OpenTelemetry, per-call LLM metering     |
 | Tooling   | pytest, Vitest, Playwright, ruff, mypy, ESLint, GitHub Actions CI                   |
@@ -159,7 +162,7 @@ The frontend talks to the backend at `NEXT_PUBLIC_API_URL` (default
 
 ## LLM providers
 
-The backend runs against one of four providers, selected with `LLM_PROVIDER`:
+The backend runs against one of five providers, selected with `LLM_PROVIDER`:
 
 | Provider     | Key needed        | Notes                                            |
 |--------------|-------------------|--------------------------------------------------|
@@ -167,6 +170,7 @@ The backend runs against one of four providers, selected with `LLM_PROVIDER`:
 | `openrouter` | `OPENROUTER_API_KEY` | Access to many hosted models.                  |
 | `ollama`     | none              | Fully local, no rate limits. Requires Ollama.     |
 | `vertex`     | none (ADC)        | Gemini on Google Cloud, as a service identity.     |
+| `nvidia`     | `NVIDIA_API_KEY`  | Free key from build.nvidia.com: no daily quota, ~40 requests/min. |
 
 For local, no-API-key runs:
 
