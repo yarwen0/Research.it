@@ -1,7 +1,7 @@
 # Render Blueprint for the Research.it API (free plan).
 #
 # Render dashboard -> New -> Blueprint -> pick this repository. It asks for
-# the three values marked `sync: false`; nothing secret is stored here.
+# the values marked `sync: false`; nothing secret is stored here.
 # The frontend is on Vercel and the database on Neon: see DEPLOYMENT.md.
 services:
   - type: web
@@ -27,10 +27,13 @@ services:
         value: gemini
       - key: GEMINI_API_KEY
         sync: false
-      # Neon's direct (not pooled) connection string. The free instance has
-      # no persistent disk, so anything kept on SQLite would vanish each time
-      # it sleeps.
+      # Neon's two connection strings, as `neon env pull` names them: the
+      # pooled one for queries, the direct one for migrations at startup.
+      # The free instance has no persistent disk, so anything kept on SQLite
+      # would vanish each time it sleeps.
       - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
         sync: false
       # The Vercel production origin, e.g. https://researchit.vercel.app.
       - key: CORS_ORIGINS
