@@ -23,9 +23,11 @@ services:
         - be-main/evals/**
         - be-main/**/*.md
     envVars:
+      # NVIDIA's free key has no daily quota, only a per-minute cap the
+      # client paces itself under; Gemini's free tier ran dry within a run.
       - key: LLM_PROVIDER
-        value: gemini
-      - key: GEMINI_API_KEY
+        value: nvidia
+      - key: NVIDIA_API_KEY
         sync: false
       # Neon's two connection strings, as `neon env pull` names them: the
       # pooled one for queries, the direct one for migrations at startup.
