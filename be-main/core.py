@@ -558,6 +558,20 @@ class _Pacer:
 _NVIDIA_INPUT_TYPES = {"document": "passage", "query": "query"}
 
 
+class NvidiaContentRejected(RuntimeError):
+    """NVIDIA's content-safety screen refused the input (HTTP 422).
+
+    The free embedding endpoint flags ordinary paper text, roughly one
+    passage in thirty: a survey's lines on painted-hand segmentation and
+    synthetic gloves were refused.
+    """
+
+
+# Below this a rejected passage is not split further; its flagged part is left
+# out of the average instead.
+_NVIDIA_MIN_SPLIT_CHARS = 200
+
+
 def _strip_code_fence(content: str) -> str:
     """Drop the markdown fence some models wrap JSON in."""
     stripped = content.strip()
@@ -619,6 +633,8 @@ class NvidiaClient:
                     return json.loads(response.read().decode("utf-8"))
             except HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="replace").strip()
+                if exc.code == 422 and "content safety" in detail.lower():
+                    raise NvidiaContentRejected(f"NVIDIA HTTP 422: {detail}") from exc
                 if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries:
                     attempt += 1
                     retry_after = exc.headers.get("Retry-After") if exc.headers else None
@@ -671,28 +687,79 @@ class NvidiaClient:
         input_type = _NVIDIA_INPUT_TYPES.get(task or "document", "passage")
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.EMBED_BATCH):
-            batch = texts[start : start + self.EMBED_BATCH]
-            with track_llm_call(
-                self.provider,
-                self.embed_model,
-                "embeddings",
-                prompt_chars=sum(len(t) for t in batch),
-            ) as call:
-                parsed = self._post(
-                    "/embeddings",
-                    {
-                        "model": self.embed_model,
-                        "input": batch,
-                        "input_type": input_type,
-                        "encoding_format": "float",
-                        # Cut an over-long passage rather than fail its batch.
-                        "truncate": "END",
-                    },
-                )
-                _record_openai_usage(call, parsed)
-            rows = sorted(parsed.get("data", []), key=lambda row: row.get("index", 0))
-            vectors.extend(row["embedding"] for row in rows)
+            vectors.extend(self._embed_batch(texts[start : start + self.EMBED_BATCH], input_type))
         return vectors
+
+    def _embed_request(self, batch: list[str], input_type: str) -> list[list[float]]:
+        with track_llm_call(
+            self.provider,
+            self.embed_model,
+            "embeddings",
+            prompt_chars=sum(len(t) for t in batch),
+        ) as call:
+            parsed = self._post(
+                "/embeddings",
+                {
+                    "model": self.embed_model,
+                    "input": batch,
+                    "input_type": input_type,
+                    "encoding_format": "float",
+                    # Cut an over-long passage rather than fail its batch.
+                    "truncate": "END",
+                },
+            )
+            _record_openai_usage(call, parsed)
+        rows = sorted(parsed.get("data", []), key=lambda row: row.get("index", 0))
+        return [row["embedding"] for row in rows]
+
+    def _embed_batch(self, batch: list[str], input_type: str) -> list[list[float]]:
+        """Embed a batch, halving it around any passage the screen refuses.
+
+        One refused passage used to fail its whole batch of 32, and with it
+        the paper: 16 of 50 papers in a full run went unindexed.
+        """
+        try:
+            return self._embed_request(batch, input_type)
+        except NvidiaContentRejected:
+            if len(batch) == 1:
+                return [self._embed_refused_passage(batch[0], input_type)]
+            mid = len(batch) // 2
+            return self._embed_batch(batch[:mid], input_type) + self._embed_batch(
+                batch[mid:], input_type
+            )
+
+    def _embed_refused_passage(self, text: str, input_type: str) -> list[float]:
+        """Average the embeddings of the parts of `text` the screen accepts.
+
+        The flagged sentence drops out and the rest of the passage stays
+        findable. Only a passage refused down to its smallest parts fails.
+        """
+        parts = self._accepted_parts(text, input_type)
+        if not parts:
+            raise NvidiaContentRejected(
+                f"NVIDIA refused every part of a {len(text)}-character passage"
+            )
+        mean = [sum(column) / len(parts) for column in zip(*parts, strict=True)]
+        norm = sum(x * x for x in mean) ** 0.5 or 1.0
+        logger.warning(
+            f"NVIDIA screen refused part of a passage; embedded {len(parts)} accepted part(s)"
+        )
+        return [x / norm for x in mean]
+
+    def _accepted_parts(self, text: str, input_type: str) -> list[list[float]]:
+        if len(text) < _NVIDIA_MIN_SPLIT_CHARS:
+            return []
+        # Split at the space nearest the middle, so no word is cut in two.
+        mid = len(text) // 2
+        cut = text.rfind(" ", 0, mid)
+        cut = cut if cut > 0 else mid
+        parts: list[list[float]] = []
+        for half in (text[:cut], text[cut:]):
+            try:
+                parts.extend(self._embed_request([half], input_type))
+            except NvidiaContentRejected:
+                parts.extend(self._accepted_parts(half, input_type))
+        return parts
 
 
 # One pacer per process: the cap is per account, not per client instance.

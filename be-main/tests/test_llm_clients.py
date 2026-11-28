@@ -390,6 +390,52 @@ class TestNvidia:
         client.get_embeddings(["q"], task="query")
         assert bodies[-1]["input_type"] == "query"
 
+    def test_a_refused_passage_does_not_sink_its_batch(self, monkeypatch):
+        client = self._client()
+        flagged = "painted hand gloves " * 30  # 600 characters, refused whole
+
+        def post(path, body, **kw):
+            texts = body["input"]
+            if any(t == flagged for t in texts):
+                raise core.NvidiaContentRejected("NVIDIA HTTP 422: content safety")
+            # The refused passage's halves: accept the first, refuse the rest.
+            if len(texts) == 1 and texts[0] in flagged and not texts[0].startswith("painted"):
+                raise core.NvidiaContentRejected("NVIDIA HTTP 422: content safety")
+            return {"data": [{"index": i, "embedding": [3.0, 4.0]} for i in range(len(texts))]}
+
+        monkeypatch.setattr(client, "_post", post)
+        vectors = client.get_embeddings(["fine one", flagged, "fine two"], task="document")
+
+        assert len(vectors) == 3
+        assert vectors[0] == [3.0, 4.0]
+        # The stand-in for the refused passage is a unit vector.
+        assert sum(x * x for x in vectors[1]) == pytest.approx(1.0)
+
+    def test_a_passage_refused_in_every_part_still_fails(self, monkeypatch):
+        client = self._client()
+
+        def post(path, body, **kw):
+            raise core.NvidiaContentRejected("NVIDIA HTTP 422: content safety")
+
+        monkeypatch.setattr(client, "_post", post)
+        with pytest.raises(core.NvidiaContentRejected):
+            client.get_embeddings(["x" * 1000], task="document")
+
+    def test_a_content_safety_422_is_not_retried(self, monkeypatch):
+        attempts = []
+
+        def urlopen(request, timeout):
+            attempts.append(request)
+            raise core.HTTPError(
+                request.full_url, 422, "Unprocessable", {},
+                io.BytesIO(b'{"error": {"message": "input rejected by content safety screening"}}'),
+            )
+
+        monkeypatch.setattr(core.urllib.request, "urlopen", urlopen)
+        with pytest.raises(core.NvidiaContentRejected):
+            self._client()._post("/embeddings", {})
+        assert len(attempts) == 1
+
     def test_a_caller_named_model_is_ignored(self, monkeypatch):
         client = self._client()
         bodies = []
