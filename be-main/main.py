@@ -16,6 +16,7 @@ from db.bootstrap import ensure_schema
 from logging_config import configure_logging, get_logger
 from mcp_server.server import mount_http
 from rate_limit import limiter, rate_limit_handler
+from services.jobs import fail_interrupted_jobs
 from telemetry.tracing import configure_tracing, shutdown_tracing
 
 # Configured once, at the entry point. A library module doing this would
@@ -30,6 +31,11 @@ async def lifespan(_app: FastAPI):
     # Bring the schema up to date before serving, so a fresh clone or a new
     # container needs no separate migration step.
     ensure_schema()
+    # A job still marked running died with the process before this one.
+    try:
+        fail_interrupted_jobs()
+    except Exception:
+        logger.exception("interrupted_job_sweep_failed")
     logger.info("api_started", host=HOST, port=PORT, mcp_http=mcp_sessions is not None)
     # The MCP endpoint's session manager lives as long as the app does.
     async with mcp_sessions.run() if mcp_sessions else nullcontext():
