@@ -39,10 +39,21 @@ Vercel Hobby.
 
 ### Database → Neon
 
-Create a project at <https://neon.tech>, in **AWS US West 2 (Oregon)** to sit
-next to the API, and copy its **direct** connection string (not the pooled
-one: migrations run on startup and want a plain session). The API enables
-the `vector` extension itself.
+The project is declared in [`neon.ts`](neon.ts) and linked with the Neon CLI,
+in **AWS US West 2 (Oregon)** to sit next to the API:
+
+```bash
+npm i -g neon
+neon login
+neon init --org-id <org> --project-id <project> --branch production --services postgres
+neon deploy          # applies neon.ts, pulls DATABASE_URL(_UNPOOLED) into .env
+```
+
+Neon gives two connection strings. `DATABASE_URL` is the pooled endpoint
+(PgBouncer, transaction mode), which the app's queries use; psycopg 3's
+prepared statements work through it. `DATABASE_URL_UNPOOLED` is the direct
+endpoint, which migrations use at startup, since DDL does not belong on a
+transaction-mode pooler. The API enables the `vector` extension itself.
 
 ### Backend → Render
 
@@ -52,7 +63,8 @@ the `vector` extension itself.
 | Variable         | Value                                              |
 |------------------|----------------------------------------------------|
 | `GEMINI_API_KEY` | A key from <https://aistudio.google.com/apikey>    |
-| `DATABASE_URL`   | Neon's direct connection string                     |
+| `DATABASE_URL`   | Neon's pooled connection string (`-pooler` in the host) |
+| `DATABASE_URL_UNPOOLED` | Neon's direct connection string             |
 | `CORS_ORIGINS`   | The Vercel production URL, e.g. `https://researchit.vercel.app` |
 
 It deploys `be-main/Dockerfile`, and from then on redeploys each push to
@@ -240,6 +252,8 @@ The project needs the Vertex AI API enabled and your account
 | `VERTEX_MODEL`             | backend   | `gemini-2.5-flash-lite`  | Gemini model on Vertex AI                  |
 | `VERTEX_EMBED_MODEL`       | backend   | `text-embedding-005`     | Embedding model on Vertex AI               |
 | `TRUSTED_PROXY_HOPS`       | backend   | `0`                      | Proxies that append to `X-Forwarded-For`   |
+| `DATABASE_URL`             | backend   | SQLite under `be-main/data` | Database for the app's queries          |
+| `DATABASE_URL_UNPOOLED`    | backend   | `DATABASE_URL`           | Direct connection for migrations, behind a pooler |
 | `CLIENT_IP_HEADER`         | backend   | —                        | Edge-set client IP header, e.g. `true-client-ip` on Render |
 | `RESEARCH_MAX_TOPICS`      | backend   | `10`                     | Most topics one run may ask for            |
 | `RESEARCH_MAX_PAPERS_PER_TOPIC` | backend | `10`                  | Most papers per topic one run may ask for  |
