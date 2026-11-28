@@ -89,7 +89,10 @@ Now the pipeline emits `PipelineEvent`s, a runner persists them, and clients
 tail the table. Disconnecting stops the reading, not the work.
 
 The runner is in-process, so jobs die with the container and do not spread
-across workers. That is the honest limit. The seam sits in the right place —
+across workers. That is the honest limit. A job a dead process left pending
+or running is marked failed when the API next starts, so a client resuming
+it hears so instead of waiting out the idle timeout; free hosts that sleep an
+idle service make that the common case, not the rare one. The seam sits in the right place —
 `services/jobs.py` is the only module that would change for Celery or ARQ.
 
 ### Postgres in production, SQLite by default
@@ -346,7 +349,8 @@ keyed on the left-most `X-Forwarded-For` entry, correct for a proxy that
 overwrites the header and wrong for one that appends to it, as Google's does:
 there the left-most entry is whatever the client sent, and a caller could
 pick a fresh quota bucket per request. `TRUSTED_PROXY_HOPS` reads the entry
-the proxy appended instead.
+the proxy appended instead. Render's edge appends too, but also overwrites a
+`True-Client-IP` header of its own, so `CLIENT_IP_HEADER` reads that there.
 
 ### Authors are scoped per project
 
