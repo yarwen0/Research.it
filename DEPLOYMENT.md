@@ -90,14 +90,19 @@ vercel --prod
   minutes. So while a run or review streams, the frontend pings `/health`
   every 4 minutes; keep the tab open until it finishes. A job a dead
   instance left behind is marked failed the next time the API starts.
-- **0.1 CPU and 512 MB of RAM.** A 2-topic, 2-paper run peaked at about
-  180 MB, so the "fast" and "medium" presets fit; runs are slow because PDF
-  parsing gets a tenth of a core.
+- **0.1 CPU and 512 MB of RAM.** Measured on the live service: the largest
+  preset, 10 topics × 5 papers, took about 30 minutes end to end (266 LLM
+  calls, 1.6M tokens, a 4,220-node citation graph) and held memory near
+  220 MB. The time goes on one paper's LLM calls after another, not on the
+  CPU.
 - **No persistent disk.** Runs, papers, graphs and passages live in Neon and
   survive; downloaded PDFs and compiled reviews under `/app/data` do not.
 - **The LLM is NVIDIA's free key.** It has no daily quota, only a cap of
   about 40 requests a minute shared by every model, which the client paces
-  itself under. Gemini's free tier was tried first and could not finish a
+  itself under. Its embedding endpoint screens input for "content
+  safety" and refuses ordinary paper text now and then (about one passage
+  in thirty); a refused passage is embedded from the parts it accepts
+  rather than losing its paper. Gemini's free tier was tried first and could not finish a
   small run: a few runs a day exhaust it, and its embedding limit refused
   most papers' passages. NVIDIA describes its free key as a trial for
   prototyping. The API's own limits (5 runs an hour per visitor, at most
