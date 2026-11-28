@@ -118,3 +118,14 @@ def db_session(request) -> Session:
         session.close()
         transaction.rollback()
         connection.close()
+
+
+@pytest.fixture(autouse=True)
+def _forget_exhausted_gemini_models():
+    """Gemini models marked out of quota are remembered per process; one
+    test spending a model's quota must not change which model the next uses."""
+    import core
+
+    core._exhausted_until.clear()
+    yield
+    core._exhausted_until.clear()

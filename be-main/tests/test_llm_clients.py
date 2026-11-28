@@ -137,6 +137,24 @@ class TestGemini:
             ("gemini-2.5-flash", "ok"),
         ]
 
+    def test_a_spent_model_is_skipped_on_later_calls(self, monkeypatch):
+        client = GeminiClient(
+            api_key="k", model="gemini-2.5-flash-lite", fallback_models=["gemini-3.1-flash-lite"]
+        )
+        tried = []
+
+        def post(url, body, **kw):
+            tried.append(url)
+            if "gemini-2.5-flash-lite" in url:
+                raise RuntimeError("Gemini HTTP 429: GenerateRequestsPerDayPerProjectPerModel")
+            return self._response(promptTokenCount=5, candidatesTokenCount=1)
+
+        monkeypatch.setattr(client, "_post", post)
+        client.chat_completion(MESSAGES, response_format=None)
+        client.chat_completion(MESSAGES, response_format=None)
+
+        assert sum("gemini-2.5-flash-lite" in url for url in tried) == 1
+
     def test_a_retired_model_falls_through_to_the_next(self, monkeypatch):
         client = GeminiClient(
             api_key="k", model="gemini-2.0-flash-lite", fallback_models=["gemini-3.1-flash-lite"]
@@ -303,3 +321,21 @@ class TestEmbeddingTaskHints:
             OpenRouterClient(api_key="k", model="m").embedding_model_id
             == "sentence-transformers/all-minilm-l12-v2"
         )
+
+
+class TestGeminiDailyQuota:
+    def test_a_spent_daily_quota_is_not_retried(self, monkeypatch):
+        detail = b'{"error": {"code": 429, "message": "quota GenerateRequestsPerDayPerProjectPerModel-FreeTier"}}'
+        calls = []
+
+        def urlopen(request, timeout):
+            calls.append(request)
+            raise core.HTTPError(request.full_url, 429, "Too Many Requests", {}, io.BytesIO(detail))
+
+        monkeypatch.setattr(core.urllib.request, "urlopen", urlopen)
+        monkeypatch.setattr(core.time, "sleep", lambda s: pytest.fail("slept on a daily quota"))
+        client = GeminiClient(api_key="k")
+
+        with pytest.raises(RuntimeError, match="429"):
+            client._post("https://example.invalid", {})
+        assert len(calls) == 1

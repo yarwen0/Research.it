@@ -77,6 +77,18 @@ def _record_openai_usage(call: LLMCall, parsed: dict) -> None:
 # what reranking and the review pipeline have always sent.
 EMBEDDING_TASKS = ("document", "query")
 
+# A free-tier model whose daily quota is spent stays spent until the quota
+# resets, so later calls skip straight past it instead of paying a round trip
+# (and, before this, two rate-limit retries) to learn that again. An hour is
+# short enough to notice the reset the same day. model -> monotonic deadline.
+_EXHAUSTED_FOR_SECONDS = 3600
+_exhausted_until: dict[str, float] = {}
+
+
+def _is_daily_quota_error(text: str) -> bool:
+    return "429" in text and ("PerDay" in text or "RPD" in text or "free_tier_requests" in text)
+
+
 _GEMINI_TASK_TYPES = {"document": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"}
 
 # Local models that expect the task as a text prefix. nomic-embed-text's model
@@ -186,8 +198,11 @@ class GeminiClient:
                 return json.loads(data)
             except HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="replace").strip()
+                # A spent daily quota will not recover in seconds; retrying it
+                # only stalls the call before the model chain moves on.
+                daily = exc.code == 429 and _is_daily_quota_error(f"429 {detail}")
                 # Retry on rate limits and transient server errors
-                if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                if exc.code in (429, 500, 502, 503, 504) and attempt < max_retries and not daily:
                     attempt += 1
                     # Honor Gemini's suggested delay but cap it: the free tier can
                     # ask for ~55s, which would stall the request for minutes across
@@ -239,7 +254,10 @@ class GeminiClient:
 
         prompt_chars = _prompt_chars(messages)
         last_err: Exception | None = None
-        for model in self.model_chain:
+        now = time.monotonic()
+        live = [m for m in self.model_chain if _exhausted_until.get(m, 0) <= now]
+        # Every model spent: try them all anyway rather than fail without asking.
+        for model in live or self.model_chain:
             url = self._generate_url(model)
             try:
                 # Each model attempt is its own call: a quota-exhausted model
@@ -252,7 +270,8 @@ class GeminiClient:
             except RuntimeError as exc:
                 msg = str(exc)
                 # If we're out of daily quota for THIS model, try the next one.
-                if "429" in msg and ("PerDay" in msg or "RPD" in msg or "free_tier_requests" in msg):
+                if _is_daily_quota_error(msg):
+                    _exhausted_until[model] = time.monotonic() + _EXHAUSTED_FOR_SECONDS
                     logger.warning(
                         f"Gemini model {model} exhausted daily quota; "
                         f"falling back to next model in chain."
