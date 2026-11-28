@@ -53,8 +53,10 @@ _DEFAULT_PRICES: dict[str, Price] = {
     "gemini-embedding-001": Price(0.15),
 }
 
-# Providers whose calls cost nothing to make.
-_FREE_PROVIDERS = frozenset({"ollama"})
+# Providers whose calls cost nothing to make. NVIDIA's hosted models are
+# free on the build.nvidia.com key this client is built for; a paid NIM
+# deployment would price them through LLM_PRICES instead.
+_FREE_PROVIDERS = frozenset({"ollama", "nvidia"})
 
 # Vertex publishes some models under a dated suffix ("gemini-2.0-flash-001")
 # and the Gemini API under a path ("models/gemini-embedding-001"). Both name
