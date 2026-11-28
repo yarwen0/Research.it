@@ -100,7 +100,8 @@ def clean_text(text: str) -> str:
     dropped; a word hyphenated across a line break is rejoined. Line breaks
     themselves stay, because headings are found line by line.
     """
-    text = unicodedata.normalize("NFKC", text).replace("\u00ad", "")
+    # NUL too: Postgres refuses it in text columns.
+    text = unicodedata.normalize("NFKC", text).replace("\u00ad", "").replace("\x00", "")
     return re.sub(r"(?<=[a-z])-\n(?=[a-z])", "", text)
 
 

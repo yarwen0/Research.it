@@ -113,6 +113,15 @@ def fetch_arxiv_search_results(
     ) from last_err
 
 
+def page_text(page: Any) -> str:
+    """A PDF page's text, without the NUL bytes some PDFs carry.
+
+    Postgres refuses NUL in text columns, so one such paper failed to index
+    on the hosted database while SQLite, used locally, stored it silently.
+    """
+    return page.get_text().replace("\x00", "")
+
+
 USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -383,7 +392,7 @@ class ArxivClient:
             
             for page_num in range(num_pages):
                 page = doc[page_num]
-                text = page.get_text()  # type: ignore[attr-defined]
+                text = page_text(page)
                 text_parts.append(text)
             
             doc.close()
@@ -418,7 +427,7 @@ class ArxivClient:
             all_page_texts = []
             for page_num in range(total_pages):
                 page = doc[page_num]
-                text = page.get_text()  # type: ignore[attr-defined]
+                text = page_text(page)
                 all_page_texts.append(text)
             
             doc.close()

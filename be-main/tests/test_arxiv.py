@@ -62,3 +62,13 @@ class TestReferencesSection:
         # Without the heading recognised, this fell back to the document tail.
         text = "body\n11.\nBibliographical References\n[1] Main entry. 2021.\n12.\nLanguage Resource References\n[2] Corpus. 2020."
         assert ArxivClient._references_section(text).startswith("[1] Main entry.")
+
+
+def test_page_text_drops_nul_bytes():
+    from api.arxiv import page_text
+
+    class Page:
+        def get_text(self):
+            return "Protein\x00 structure\x00"
+
+    assert page_text(Page()) == "Protein structure"

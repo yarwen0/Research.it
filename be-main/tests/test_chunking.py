@@ -51,6 +51,9 @@ class TestCleanText:
     def test_folds_ligatures(self):
         assert clean_text("eﬃcient ﬁne-tuning") == "efficient fine-tuning"
 
+    def test_drops_nul_bytes_postgres_refuses(self):
+        assert clean_text("protein\x00 folding") == "protein folding"
+
     def test_drops_soft_hyphens(self):
         assert clean_text("re­construction") == "reconstruction"
 
