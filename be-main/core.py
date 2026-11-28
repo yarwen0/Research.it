@@ -23,6 +23,7 @@ from config import (
     NVIDIA_EMBED_MODEL,
     NVIDIA_MODEL,
     NVIDIA_RPM,
+    NVIDIA_THINKING,
     OLLAMA_BASE_URL,
     OLLAMA_EMBED_MODEL,
     OLLAMA_MODEL,
@@ -587,8 +588,10 @@ class NvidiaClient:
         embed_model: str,
         base_url: str = "https://integrate.api.nvidia.com/v1",
         rpm: int = 35,
+        thinking: bool = False,
         timeout: int = 120,
     ) -> None:
+        self.thinking = thinking
         self.api_key = api_key
         self.model = model
         self.embed_model = embed_model
@@ -629,7 +632,14 @@ class NvidiaClient:
                 raise RuntimeError(f"NVIDIA HTTP {exc.code}: {detail or exc.reason}") from exc
 
     def chat_completion(self, messages: list[dict[str, str]], *, response_format: dict | None) -> str:
-        body: dict = {"model": self.model, "messages": messages, "temperature": 0.2}
+        body: dict = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.2,
+            # Reasoning arrives in its own field and is discarded here, so it
+            # only costs time unless asked for.
+            "chat_template_kwargs": {"enable_thinking": self.thinking},
+        }
         if response_format:
             body["response_format"] = response_format
         with track_llm_call(
@@ -727,6 +737,7 @@ def create_llm_client(*, model: str | None = None, timeout: int = 120):
             embed_model=NVIDIA_EMBED_MODEL,
             base_url=NVIDIA_BASE_URL,
             rpm=NVIDIA_RPM,
+            thinking=NVIDIA_THINKING,
             timeout=timeout,
         )
 

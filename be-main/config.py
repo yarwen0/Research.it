@@ -61,9 +61,16 @@ OLLAMA_NUM_CTX = _int("OLLAMA_NUM_CTX", 8192)
 # it. NVIDIA describes the free key as a trial for prototyping.
 NVIDIA_API_KEY = _maybe("NVIDIA_API_KEY")
 NVIDIA_BASE_URL = _maybe("NVIDIA_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-NVIDIA_MODEL = _maybe("NVIDIA_MODEL") or "nvidia/nemotron-3.5-lightning-30b-a3b"
-NVIDIA_EMBED_MODEL = _maybe("NVIDIA_EMBED_MODEL") or "nvidia/llama-3.2-nv-embedqa-1b-v1"
+NVIDIA_MODEL = _maybe("NVIDIA_MODEL") or "nvidia/nemotron-3.5-super-vl-120b-a12b"
+# 2048 dimensions. The 8b sibling separates passages a little better at twice
+# the storage, which matters on a free database measured in hundreds of MB.
+# The older nv-embedqa models answer 404 to free keys.
+NVIDIA_EMBED_MODEL = _maybe("NVIDIA_EMBED_MODEL") or "nvidia/nemotron-3.5-embed-1b"
 NVIDIA_RPM = _int("NVIDIA_RPM", 35)
+# Nemotron models reason before answering unless told not to: on extraction
+# prompts that made each call 4-6x slower and several times longer, for the
+# same fields. Off unless asked for.
+NVIDIA_THINKING = _truthy(os.getenv("NVIDIA_THINKING"))
 
 # When using Gemini chat, embeddings still default to Gemini. Set OPENROUTER_FOR_EMBEDDINGS=1
 # to route high-volume embeddings through OpenRouter instead (needs a paid / non-exhausted key).

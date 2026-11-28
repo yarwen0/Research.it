@@ -364,6 +364,7 @@ class TestNvidia:
 
         assert sent["path"] == "/chat/completions"
         assert sent["body"]["response_format"] == fmt
+        assert sent["body"]["chat_template_kwargs"] == {"enable_thinking": False}
         [call] = usage.calls
         assert (call.provider, call.input_tokens, call.output_tokens) == ("nvidia", 12, 3)
         assert call.cost_usd == 0.0
