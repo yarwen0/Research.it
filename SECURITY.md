@@ -92,6 +92,8 @@ There is no authentication yet, so every endpoint is rate limited per client
 ([`be-main/rate_limit.py`](be-main/rate_limit.py)). Limits are tiered by what a
 call actually costs — a research run is dozens of PDF downloads plus a long
 chain of LLM requests, so it gets 5/hour against a 120/minute general budget.
+A run's size is capped too, at 10 topics of 10 papers by default, so one
+allowed request cannot queue thousands of papers.
 
 Two deployment details matter:
 
@@ -105,6 +107,10 @@ Two deployment details matter:
   There the left-most entry is whatever the client sent, and trusting it
   would let a caller pick its own bucket; the limiter reads the entry the
   proxy appended instead.
+- **`CLIENT_IP_HEADER`** takes precedence over both, for an edge that sets a
+  header of its own on every request. Render's keeps whatever
+  `X-Forwarded-For` the client sent but overwrites `True-Client-IP`, so the
+  Render blueprint keys on that.
 - **`RATE_LIMIT_STORAGE_URI`** defaults to in-memory, which is per-process.
   With N workers the effective limit is N×. Point it at Redis before scaling
   past one.
