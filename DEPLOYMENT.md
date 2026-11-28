@@ -84,10 +84,12 @@ vercel --prod
 - **The API sleeps after 15 minutes without a request** and takes about a
   minute to wake. The home page pings it on load so it boots while you type,
   and the frontend says so if a request still lands on a cold instance.
-- **A run in progress dies if the API is put to sleep or restarted.** Keep
-  the tab open while it runs; an open stream should keep the instance awake,
-  though Render does not document that. A job a dead instance left behind is
-  marked failed the next time the API starts.
+- **A run in progress dies if the API is put to sleep or restarted.** Render
+  stops a free instance 15 minutes after its last *incoming request*, and an
+  open stream does not count: a 50-paper run was cut off at exactly 15
+  minutes. So while a run or review streams, the frontend pings `/health`
+  every 4 minutes; keep the tab open until it finishes. A job a dead
+  instance left behind is marked failed the next time the API starts.
 - **0.1 CPU and 512 MB of RAM.** A 2-topic, 2-paper run peaked at about
   180 MB, so the "fast" and "medium" presets fit; runs are slow because PDF
   parsing gets a tenth of a core.
