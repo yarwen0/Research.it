@@ -401,10 +401,26 @@ class ResearchPipeline:
                         yield event
                 except ArxivRateLimitError as exc:
                     # arXiv is throttling; every remaining topic fails the same
-                    # way, so stop rather than grinding through them.
-                    logger.error("Aborting research run: %s", exc)
-                    yield error(str(exc), fatal=True)
-                    return
+                    # way, so stop searching rather than grinding through them.
+                    if not self.processed_papers:
+                        logger.error("Aborting research run: %s", exc)
+                        yield error(str(exc), fatal=True)
+                        return
+                    # Papers already read took most of the run's time and LLM
+                    # budget; a throttled fourth topic is no reason to discard
+                    # three topics' worth. Finish with what there is.
+                    remaining = len(self.topics_to_process) - index
+                    logger.warning(
+                        "arXiv throttled with %s topic(s) left; finishing with %s papers",
+                        remaining,
+                        len(self.processed_papers),
+                    )
+                    yield error(
+                        f"{exc} Skipped the last {remaining} of "
+                        f"{len(self.topics_to_process)} topics and finished with the "
+                        f"{len(self.processed_papers)} papers already read."
+                    )
+                    break
 
             logger.info("Saving %s processed papers", len(self.processed_papers))
             saved_filepath = save_processed_papers(

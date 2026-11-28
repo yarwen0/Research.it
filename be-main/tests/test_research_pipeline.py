@@ -305,6 +305,28 @@ class TestErrorContainment:
         assert "throttling" in events[-1].message
         assert len(throttled.calls) == 1
 
+    async def test_arxiv_throttling_mid_run_keeps_the_papers_already_read(self, pipeline):
+        from api.arxiv import ArxivRateLimitError
+
+        class ThrottledAfterFirst(StubArxivClient):
+            def search_and_extract_papers(self, topic, *args):
+                self.calls.append(topic)
+                if len(self.calls) > 1:
+                    raise ArxivRateLimitError("arXiv is throttling requests")
+                return self.papers_by_topic.get(topic, [])
+
+        throttled = ThrottledAfterFirst({"first": [_arxiv_paper("2301.001", "A")]})
+        events = await _collect(
+            pipeline(arxiv_client=throttled, topics=["first", "second", "third"])
+        )
+
+        assert throttled.calls == ["first", "second"]
+        warnings = [e for e in events if e.status == StatusType.ERROR]
+        assert "Skipped the last 2 of 3 topics" in warnings[0].message
+        assert not (warnings[0].result or {}).get("fatal")
+        assert events[-1].status == StatusType.COMPLETED
+        assert events[-1].result["total_papers"] == 1
+
     async def test_failed_suggestions_do_not_fail_the_run(self, pipeline):
         class FailingGenerator(StubTopicGenerator):
             def generate_paper_suggestions(self, **_kwargs):
